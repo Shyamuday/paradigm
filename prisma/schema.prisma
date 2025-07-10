@@ -1,0 +1,193 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User authentication and sessions
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Trading sessions
+  sessions TradingSession[]
+  
+  @@map("users")
+}
+
+// Trading sessions
+model TradingSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  mode        String   // paper, live, backtest
+  capital     Float
+  status      String   // active, completed, stopped
+  
+  // Related data
+  trades      Trade[]
+  positions   Position[]
+  
+  @@map("trading_sessions")
+}
+
+// Instruments (stocks, options, etc.)
+model Instrument {
+  id           String   @id @default(cuid())
+  symbol       String   @unique
+  name         String
+  exchange     String
+  instrumentType String  // EQ, OPT, FUT, etc.
+  lotSize      Int?
+  tickSize     Float?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  // Related data
+  trades       Trade[]
+  positions    Position[]
+  marketData   MarketData[]
+  
+  @@map("instruments")
+}
+
+// Market data (historical and live)
+model MarketData {
+  id           String   @id @default(cuid())
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  timestamp    DateTime
+  open         Float?
+  high         Float?
+  low          Float?
+  close        Float?
+  volume       Int?
+  ltp          Float?  // Last traded price
+  change       Float?  // Price change
+  changePercent Float? // Price change percentage
+  
+  @@unique([instrumentId, timestamp])
+  @@map("market_data")
+}
+
+// Trading strategies
+model Strategy {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  config      Json     // Strategy-specific configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Related data
+  trades      Trade[]
+  
+  @@map("strategies")
+}
+
+// Trades (buy/sell orders)
+model Trade {
+  id           String   @id @default(cuid())
+  sessionId    String
+  session      TradingSession @relation(fields: [sessionId], references: [id])
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  strategyId   String?
+  strategy     Strategy? @relation(fields: [strategyId], references: [id])
+  
+  // Trade details
+  action       String   // BUY, SELL
+  quantity     Int
+  price        Float
+  orderType    String   // MARKET, LIMIT, SL, SL-M
+  orderId      String?  // Zerodha order ID
+  status       String   // PENDING, COMPLETE, CANCELLED, REJECTED
+  
+  // Risk management
+  stopLoss     Float?
+  target       Float?
+  trailingStop Boolean  @default(false)
+  
+  // Timestamps
+  orderTime    DateTime @default(now())
+  executionTime DateTime?
+  
+  // P&L tracking
+  realizedPnL  Float?
+  unrealizedPnL Float?
+  
+  // Related data
+  positions    Position[]
+  
+  @@map("trades")
+}
+
+// Open positions
+model Position {
+  id           String   @id @default(cuid())
+  sessionId    String
+  session      TradingSession @relation(fields: [sessionId], references: [id])
+  instrumentId String
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  tradeId      String?
+  trade        Trade? @relation(fields: [tradeId], references: [id])
+  
+  // Position details
+  quantity     Int
+  averagePrice Float
+  currentPrice Float?
+  side         String   // LONG, SHORT
+  
+  // Risk management
+  stopLoss     Float?
+  target       Float?
+  trailingStop Boolean  @default(false)
+  
+  // P&L
+  unrealizedPnL Float?
+  realizedPnL   Float?
+  
+  // Timestamps
+  openTime     DateTime @default(now())
+  closeTime    DateTime?
+  
+  @@map("positions")
+}
+
+// System logs
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     String   // INFO, WARN, ERROR, DEBUG
+  category  String   // AUTH, MARKET_DATA, STRATEGY, ORDER, etc.
+  message   String
+  data      Json?    // Additional structured data
+  timestamp DateTime @default(now())
+  
+  @@map("system_logs")
+}
+
+// Configuration settings
+model Config {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("configs")
+} 
