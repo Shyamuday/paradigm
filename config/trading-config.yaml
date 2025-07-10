@@ -1,0 +1,82 @@
+# Trading Bot Configuration
+
+# Trading Session Settings
+trading:
+  mode: "paper"  # paper, live, backtest
+  capital: 100000  # Total capital in INR
+  max_daily_loss: 5000  # Maximum daily loss in INR
+  max_position_size: 0.1  # Maximum position size as fraction of capital
+  max_open_positions: 5
+
+# Market Data Settings
+market_data:
+  websocket_url: "wss://ws.kite.trade/"
+  historical_days: 30  # Days of historical data to fetch on startup
+  instruments:
+    - symbol: "NIFTY"
+      exchange: "NSE"
+      instrument_type: "INDEX"
+    - symbol: "BANKNIFTY"
+      exchange: "NSE" 
+      instrument_type: "INDEX"
+    - symbol: "RELIANCE"
+      exchange: "NSE"
+      instrument_type: "EQ"
+
+# Risk Management
+risk:
+  default_stop_loss_percentage: 2.0
+  trailing_stop_loss: true
+  max_risk_per_trade: 0.02  # 2% of capital per trade
+  max_portfolio_risk: 0.1   # 10% of capital total risk
+
+# Trading Schedule
+schedule:
+  start_time: "09:15"
+  end_time: "15:30"
+  timezone: "Asia/Kolkata"
+  pre_market_start: "09:00"
+  post_market_end: "15:45"
+
+# Strategies Configuration
+strategies:
+  simple_ma:
+    enabled: true
+    description: "Simple Moving Average Crossover"
+    parameters:
+      short_period: 10
+      long_period: 20
+      capital_allocation: 0.3  # 30% of capital
+    instruments:
+      - "NIFTY"
+      - "BANKNIFTY"
+  
+  rsi_strategy:
+    enabled: false
+    description: "RSI Overbought/Oversold Strategy"
+    parameters:
+      rsi_period: 14
+      overbought_threshold: 70
+      oversold_threshold: 30
+      capital_allocation: 0.2
+    instruments:
+      - "RELIANCE"
+
+# Logging Configuration
+logging:
+  level: "info"  # debug, info, warn, error
+  file_path: "./logs/trading-bot.log"
+  max_file_size: "10m"
+  max_files: 5
+
+# Database Configuration
+database:
+  url: "postgresql://username:password@localhost:5432/paradigm_trading"
+  pool_size: 10
+  timeout: 30000
+
+# Dashboard Configuration
+dashboard:
+  enabled: true
+  port: 3000
+  cors_origin: "*" 
