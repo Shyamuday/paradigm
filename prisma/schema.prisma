@@ -172,7 +172,7 @@ model SystemLog {
   id        String   @id @default(cuid())
   level     String   // INFO, WARN, ERROR, DEBUG
   category  String   // AUTH, MARKET_DATA, STRATEGY, ORDER, etc.
-  message   String
+  messa`ge   String
   data      Json?    // Additional structured data
   timestamp DateTime @default(now())
   
