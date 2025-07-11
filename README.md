@@ -1,401 +1,200 @@
-# 🚀 Paradigm Algo Trading Bot
+# Paradigm Trading System
 
-A comprehensive Node.js + TypeScript algorithmic trading bot for Zerodha Kite Connect with automated authentication, database management, and strategy execution.
+A comprehensive trading system with real-time market data processing, strategy execution, and terminal-based UI.
 
-## 📋 Table of Contents
+## Features
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Documentation](#api-documentation)
-- [Testing](#testing)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [License](#license)
+### Trading Logic
 
-## ✨ Features
+- Moving Average Crossover Strategy
+  - Configurable short and long periods (default: 10, 20)
+  - Volume threshold filtering
+  - Dynamic stop-loss and target using ATR (Average True Range)
+  - Type-safe implementation with proper error handling
 
-### 🔐 Authentication
+### P&L and Position Management
 
-- **Automated API Login**: No browser automation, direct API calls
-- **TOTP Support**: Automatic 2FA using Time-based One-Time Passwords
-- **Session Management**: Automatic session persistence and validation
-- **Token Refresh**: Automatic token renewal
+- Real-time P&L tracking
+  - Realized P&L for closed trades
+  - Unrealized P&L for open positions
+  - Support for both LONG and SHORT positions
+- Position metrics
+  - Total position value
+  - Net P&L calculation
+  - Open position tracking
+  - Portfolio performance metrics
 
-### 📊 Trading System
+### Terminal UI
 
-- **Multi-Strategy Support**: Pluggable trading strategies
-- **Real-time Market Data**: Live market data processing
-- **Order Management**: Complete order lifecycle management
-- **Position Tracking**: Real-time position monitoring and P&L calculation
-- **Risk Management**: Built-in risk controls and limits
+- Real-time market data display
+- Position and order monitoring
+- P&L visualization
+- Authentication status
+- TOTP handling
+- Multi-panel layout
 
-### 🗄️ Database Integration
+### Data Processing
 
-- **PostgreSQL**: Robust data storage with Prisma ORM
-- **User Sessions**: Trading session management
-- **Trade History**: Complete trade and position history
-- **Strategy Performance**: Performance tracking and analytics
+- Real-time market data handling
+- Tick and candle data storage
+- Historical data access
+- Database integration
 
-### 🛠️ Technical Features
+### Authentication & Security
 
-- **TypeScript**: Full type safety and IntelliSense
-- **Modular Architecture**: Clean separation of concerns
-- **Event-Driven**: Reactive programming with events
-- **Logging**: Comprehensive logging system
-- **Configuration Management**: Flexible YAML and env configuration
+- Session management
+- TOTP verification
+- API quota monitoring
+- Error tracking
 
-## 🏗️ Architecture
+## Getting Started
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Paradigm Trading Bot                     │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
-│  │   Auth Module   │  │  Market Data    │  │   Strategies    ││
-│  │                 │  │                 │  │                 ││
-│  │ • API Auth      │  │ • Live Data     │  │ • Simple MA     ││
-│  │ • TOTP          │  │ • Historical    │  │ • Custom        ││
-│  │ • Session Mgmt  │  │ • Instruments   │  │ • Backtesting   ││
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐│
-│  │  Order Manager  │  │  Risk Manager   │  │  Database       ││
-│  │                 │  │                 │  │                 ││
-│  │ • Order Routing │  │ • Position Limits│  │ • PostgreSQL    ││
-│  │ • Execution     │  │ • Stop Loss     │  │ • Prisma ORM    ││
-│  │ • Trade Tracking│  │ • Daily Limits  │  │ • Migrations    ││
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘│
-└─────────────────────────────────────────────────────────────┘
-```
+1. Clone the repository
+2. Copy `env.example` to `.env` and configure your environment variables
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Initialize the database:
+   ```bash
+   npx prisma migrate dev
+   ```
+5. Start the terminal dashboard:
+   ```bash
+   npm run dashboard
+   ```
 
-## 📋 Prerequisites
+## Configuration
 
-- **Node.js**: v18.0.0 or higher
-- **PostgreSQL**: v13.0 or higher
-- **Zerodha Kite Connect**: API access with app credentials
-- **TOTP Secret**: From Zerodha 2FA setup
+### Trading Strategy
 
-## 🛠️ Installation
+Configure strategy parameters in `config/trading-config.yaml`:
 
-1. **Clone the repository:**
-
-```bash
-git clone https://github.com/your-username/paradigm-trading-bot.git
-cd paradigm-trading-bot
+```yaml
+strategies:
+  simple_ma:
+    enabled: true
+    description: "Simple Moving Average Crossover"
+    parameters:
+      short_period: 10
+      long_period: 20
+      capital_allocation: 0.3 # 30% of capital
+    instruments:
+      - "NIFTY"
+      - "BANKNIFTY"
 ```
 
-2. **Install dependencies:**
+### Risk Management
 
-```bash
-npm install
+Set risk parameters in `config/trading-config.yaml`:
+
+```yaml
+risk:
+  default_stop_loss_percentage: 2.0
+  trailing_stop_loss: true
+  max_risk_per_trade: 0.02 # 2% of capital per trade
+  max_portfolio_risk: 0.1 # 10% of capital total risk
 ```
 
-3. **Set up the database:**
+## Architecture
 
-```bash
-# Generate Prisma client
-npm run prisma:generate
+### Services
 
-# Run database migrations
-npm run prisma:migrate
-```
+- `StrategyService`: Implements trading strategies and signal generation
+  - Moving average crossover with volume filtering
+  - Technical analysis calculations (SMA, ATR)
+  - Signal generation with dynamic risk parameters
+- `OrderService`: Handles trade execution and position management
+  - P&L calculations for trades and positions
+  - Position tracking and updates
+  - Order status management
+- `MarketDataService`: Processes and stores market data
+  - Real-time tick data processing
+  - Historical data management
+  - Instrument configuration
+- `AuthManagerService`: Handles authentication and session management
+  - API authentication
+  - Session tracking
+  - TOTP verification
 
-4. **Build the project:**
+### Database
 
-```bash
-npm run build
-```
+PostgreSQL database with Prisma ORM:
 
-## ⚙️ Configuration
+- Market data storage
+- Trade and position tracking
+- User authentication
+- System configuration
 
-### Environment Variables
+### UI
 
-Create a `.env` file in the project root:
+Terminal-based dashboard using blessed and blessed-contrib:
 
-```env
-# Zerodha API Configuration
-ZERODHA_API_KEY=your_api_key_here
-ZERODHA_API_SECRET=your_api_secret_here
-ZERODHA_USER_ID=your_kite_user_id
-ZERODHA_PASSWORD=your_kite_password
-ZERODHA_TOTP_SECRET=your_base32_totp_secret
-ZERODHA_REDIRECT_URI=https://127.0.0.1
+- Multiple data panels
+- Real-time updates
+- Interactive commands
+- Status monitoring
 
-# Database Configuration
-DATABASE_URL="postgresql://username:password@localhost:5432/paradigm_trading"
-
-# Trading Configuration
-TRADING_MODE=paper  # paper, live, backtest
-TRADING_CAPITAL=100000
-MAX_DAILY_LOSS=5000
-MAX_POSITION_SIZE=0.1
-MAX_OPEN_POSITIONS=5
-
-# Logging Configuration
-LOG_LEVEL=info
-LOG_FILE_PATH=./logs/trading-bot.log
-```
-
-### Getting Your TOTP Secret
-
-1. Login to [Zerodha Kite](https://kite.zerodha.com)
-2. Go to **Settings** → **API**
-3. When setting up 2FA, scan the QR code with an authenticator app
-4. The secret key shown (base32 format) is your `TOTP_SECRET`
-
-## 🚀 Usage
-
-### Quick Start
-
-1. **Check credentials status:**
-
-```bash
-npm run auth:status
-```
-
-2. **Test authentication:**
-
-```bash
-npm run auth:login
-```
-
-3. **Run the complete system test:**
-
-```bash
-npm run bot:test
-```
-
-4. **Start the trading bot:**
-
-```bash
-npm start
-```
-
-### Available Commands
-
-```bash
-# Development
-npm run dev                 # Start in development mode
-npm run watch              # Watch mode with auto-restart
-
-# Authentication
-npm run auth:status        # Check credential status
-npm run auth:login         # Test automated login
-npm run auth:test          # Comprehensive auth test
-
-# Trading Bot
-npm run bot:test           # Test complete system
-npm start                  # Start the bot
-npm run build              # Build for production
-
-# Database
-npm run prisma:generate    # Generate Prisma client
-npm run prisma:migrate     # Run database migrations
-npm run prisma:studio      # Open Prisma Studio
-```
-
-## 📊 API Documentation
-
-### Bot Status API
-
-```typescript
-const status = await bot.getStatus();
-```
-
-Returns:
-
-```json
-{
-  "isRunning": true,
-  "authentication": {
-    "isAuthenticated": true,
-    "userId": "XB7556",
-    "tokenExpiry": "2024-01-12T06:00:00.000Z"
-  },
-  "session": {
-    "id": "session_123",
-    "mode": "paper",
-    "capital": 100000,
-    "status": "active"
-  },
-  "pnl": {
-    "realizedPnL": 1250.5,
-    "unrealizedPnL": -150.25,
-    "totalPnL": 1100.25
-  },
-  "timestamp": "2024-01-11T10:30:00.000Z"
-}
-```
-
-### Trading Operations
-
-```typescript
-// Create a trade
-const trade = await orderService.createTrade(sessionId, signal, strategyId);
-
-// Get positions
-const positions = await orderService.getPositions(sessionId);
-
-// Get session P&L
-const pnl = await orderService.getSessionPnL(sessionId);
-```
-
-## 🧪 Testing
-
-### Authentication Tests
-
-```bash
-# Test API-based authentication
-npm run auth:test
-
-# Test standalone login
-npm run auth:login
-
-# Check credentials status
-npm run auth:status
-```
-
-### Complete System Test
-
-```bash
-# Run full system test
-npm run bot:test
-```
-
-This test will:
-
-- ✅ Initialize all services
-- ✅ Connect to database
-- ✅ Authenticate with Zerodha
-- ✅ Run trading loop for 10 seconds
-- ✅ Gracefully shutdown
-
-## 📁 Project Structure
-
-```
-paradigm/
-├── src/
-│   ├── auth/                      # Authentication modules
-│   │   ├── zerodha-api-auth.ts    # New API-based auth
-│   │   ├── automated-login-example.ts
-│   │   └── test-zerodha-api-auth.ts
-│   ├── config/                    # Configuration management
-│   │   └── config-manager.ts
-│   ├── database/                  # Database connection
-│   │   └── database.ts
-│   ├── services/                  # Business logic services
-│   │   ├── user.service.ts        # User management
-│   │   ├── market-data.service.ts # Market data
-│   │   ├── order.service.ts       # Order management
-│   │   └── strategy.service.ts    # Strategy execution
-│   ├── logger/                    # Logging system
-│   │   └── logger.ts
-│   ├── types/                     # TypeScript definitions
-│   │   └── index.ts
-│   ├── index.ts                   # Main application
-│   └── test-complete-system.ts    # System test
-├── prisma/                        # Database schema
-│   └── schema.prisma
-├── config/                        # Configuration files
-│   └── trading-config.yaml
-├── docs/                          # Documentation
-│   └── API_AUTHENTICATION.md
-├── logs/                          # Log files
-└── package.json
-```
-
-## 🔧 Development
-
-### Database Schema
-
-The system uses a comprehensive database schema:
-
-- **Users & Sessions**: User authentication and trading sessions
-- **Instruments**: Stock/option instrument definitions
-- **Market Data**: Historical and real-time market data
-- **Strategies**: Trading strategy configurations
-- **Trades**: Order and execution tracking
-- **Positions**: Position management and P&L
-- **System Logs**: Comprehensive logging
+## Development
 
 ### Adding New Strategies
 
-1. Create strategy in `src/strategies/your-strategy.ts`
-2. Register in `src/services/strategy.service.ts`
+1. Create a new strategy class in `src/services/strategies/`
+2. Implement the strategy interface
 3. Add configuration in `config/trading-config.yaml`
-4. Test with `npm run bot:test`
+4. Register the strategy in `StrategyService`
 
-## 📈 Performance
+Example strategy implementation:
 
-### System Metrics
+```typescript
+async generateSignals(marketData: MarketDataPoint[]): Promise<TradeSignal[]> {
+    // Calculate technical indicators
+    const shortMA = calculateSMA(marketData, shortPeriod);
+    const longMA = calculateSMA(marketData, longPeriod);
 
-- **Latency**: < 100ms for order processing
-- **Throughput**: 1000+ orders per minute
-- **Memory**: < 512MB typical usage
-- **CPU**: < 10% on modern hardware
+    // Generate signals on crossovers
+    const signals = [];
+    for (let i = 1; i < marketData.length; i++) {
+        const currentCrossover = shortMA[i] - longMA[i];
+        const previousCrossover = shortMA[i-1] - longMA[i-1];
 
-### Optimization Features
+        if (previousCrossover <= 0 && currentCrossover > 0) {
+            signals.push(createBuySignal(marketData[i]));
+        } else if (previousCrossover >= 0 && currentCrossover < 0) {
+            signals.push(createSellSignal(marketData[i]));
+        }
+    }
+    return signals;
+}
+```
 
-- **Connection Pooling**: Efficient database connections
-- **Session Caching**: Reduced authentication overhead
-- **Batch Processing**: Efficient market data handling
-- **Event-Driven**: Non-blocking operations
+### Testing
 
-## 🛡️ Security
+```bash
+npm test
+```
 
-### Security Features
+### Logging
 
-- **Environment Variables**: Secure credential storage
-- **Token Encryption**: Secure session management
-- **Input Validation**: Comprehensive data validation
-- **Rate Limiting**: API call throttling
-- **Audit Logging**: Complete audit trail
+Logs are stored in:
 
-### Best Practices
+- `logs/trading-bot.log`: General application logs
+- `logs/error.log`: Error tracking
 
-1. **Never commit credentials** to version control
-2. **Use strong passwords** for database access
-3. **Rotate API keys** regularly
-4. **Monitor logs** for suspicious activity
-5. **Use SSL/TLS** for all connections
+## API Documentation
 
-## 🤝 Contributing
+See `docs/API_AUTHENTICATION.md` for API authentication details.
+
+## Terminal UI Guide
+
+See `docs/TERMINAL_UI.md` for detailed UI usage instructions.
+
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -am 'Add your feature'`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Submit a pull request
+2. Create a feature branch
+3. Submit a pull request
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## ⚠️ Disclaimer
-
-This software is for educational and development purposes. Always comply with:
-
-- Zerodha's terms of service
-- Local financial regulations
-- Risk management principles
-- Proper testing before live trading
-
-**Use at your own risk. Past performance does not guarantee future results.**
-
----
-
-## 🆘 Support
-
-For support and questions:
-
-- 📧 Email: support@paradigm-trading.com
-- 💬 Discord: [Paradigm Trading Community](https://discord.gg/paradigm)
-- 📖 Documentation: [docs.paradigm-trading.com](https://docs.paradigm-trading.com)
-
----
-
-**Made with ❤️ by the Paradigm Team**
+MIT License
