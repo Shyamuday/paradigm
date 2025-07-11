@@ -12,7 +12,12 @@
     "lint": "eslint src/**/*.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "auth:test": "ts-node src/auth/test-zerodha-api-auth.ts",
+    "auth:login": "ts-node src/auth/automated-login-example.ts",
+    "auth:legacy": "ts-node src/auth/test-zerodha-auth.ts",
+    "auth:status": "ts-node src/auth/quick-test.ts",
+    "bot:test": "ts-node src/test-complete-system.ts"
   },
   "keywords": [
     "trading",
@@ -32,9 +37,11 @@
     "lodash": "^4.17.21",
     "moment": "^2.29.4",
     "node-cron": "^3.0.3",
+    "otplib": "^12.0.1",
     "pg": "^8.11.3",
     "prisma": "^5.6.0",
     "puppeteer": "^21.11.0",
+    "qs": "^6.14.0",
     "reflect-metadata": "^0.1.13",
     "totp-generator": "^1.0.0",
     "typeorm": "^0.3.17",
