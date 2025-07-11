@@ -21,6 +21,17 @@ model User {
   // Trading sessions
   sessions TradingSession[]
   
+  // Risk management
+  riskProfile RiskProfile?
+  
+  // Alerts
+  alerts Alert[]
+  
+  // API monitoring
+  apiUsage ApiUsage[]
+  apiQuotas ApiQuota[]
+  apiErrors ApiError[]
+  
   @@map("users")
 }
 
@@ -38,6 +49,7 @@ model TradingSession {
   // Related data
   trades      Trade[]
   positions   Position[]
+  riskMetrics RiskMetrics[]
   
   @@map("trading_sessions")
 }
@@ -59,6 +71,8 @@ model Instrument {
   trades       Trade[]
   positions    Position[]
   marketData   MarketData[]
+  alerts       Alert[]
+  backtestTrades BacktestTrade[]
   
   @@map("instruments")
 }
@@ -94,6 +108,7 @@ model Strategy {
   
   // Related data
   trades      Trade[]
+  backtestResults BacktestResult[]
   
   @@map("strategies")
 }
@@ -131,6 +146,8 @@ model Trade {
   
   // Related data
   positions    Position[]
+  transactionCost TransactionCost?
+  tradingFees  TradingFees[]
   
   @@map("trades")
 }
@@ -167,12 +184,205 @@ model Position {
   @@map("positions")
 }
 
+// Risk Management
+model RiskProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  maxDailyLoss    Float    // Maximum daily loss allowed
+  maxDrawdown     Float    // Maximum portfolio drawdown
+  maxPositionSize Float    // Maximum position size as percentage of portfolio
+  riskPerTrade    Float    // Risk per trade as percentage
+  maxOpenTrades   Int      @default(10)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("risk_profiles")
+}
+
+model RiskMetrics {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         TradingSession @relation(fields: [sessionId], references: [id])
+  date            DateTime @db.Date
+  dailyPnL        Float
+  drawdown        Float
+  currentRisk     Float    // Current risk exposure
+  var             Float?   // Value at Risk
+  sharpeRatio     Float?
+  maxDrawdown     Float
+  winRate         Float
+  profitFactor    Float
+  
+  @@unique([sessionId, date])
+  @@map("risk_metrics")
+}
+
+// Alerts System
+model Alert {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  instrumentId String?
+  instrument   Instrument? @relation(fields: [instrumentId], references: [id])
+  type         String   // PRICE, VOLUME, TECHNICAL_INDICATOR, PNL, RISK
+  condition    String   // ABOVE, BELOW, CROSSES_ABOVE, CROSSES_BELOW, EQUALS
+  value        Float
+  currentValue Float?
+  message      String?  // Custom alert message
+  isActive     Boolean  @default(true)
+  isTriggered  Boolean  @default(false)
+  triggeredAt  DateTime?
+  createdAt    DateTime @default(now())
+  
+  notifications AlertNotification[]
+  
+  @@map("alerts")
+}
+
+model AlertNotification {
+  id          String   @id @default(cuid())
+  alertId     String
+  alert       Alert    @relation(fields: [alertId], references: [id])
+  method      String   // EMAIL, SMS, PUSH, WEBHOOK
+  destination String   // Email address, phone number, webhook URL
+  status      String   // PENDING, SENT, FAILED
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+  
+  @@map("alert_notifications")
+}
+
+// Backtesting Analytics
+model BacktestResult {
+  id              String   @id @default(uuid())
+  strategy        Strategy @relation(fields: [strategyId], references: [id])
+  strategyId      String
+  startDate       DateTime
+  endDate         DateTime
+  initialCapital  Float
+  finalCapital    Float
+  totalReturn     Float
+  totalTrades     Int
+  winningTrades   Int
+  losingTrades    Int
+  winRate         Float
+  maxDrawdown     Float
+  trades          String   // Store as JSON string
+  dailyReturns    String   // Store as JSON string
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("backtest_results")
+}
+
+model BacktestTrade {
+  id              String   @id @default(cuid())
+  backtestId      String
+  backtest        BacktestResult @relation(fields: [backtestId], references: [id])
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  action          String   // BUY, SELL
+  quantity        Int
+  entryPrice      Float
+  exitPrice       Float?
+  pnl             Float?
+  entryTime       DateTime
+  exitTime        DateTime?
+  holdingPeriod   Int?     // In minutes
+  
+  @@map("backtest_trades")
+}
+
+// Transaction Cost Tracking
+model TransactionCost {
+  id            String   @id @default(cuid())
+  tradeId       String   @unique
+  trade         Trade    @relation(fields: [tradeId], references: [id])
+  brokerage     Float    @default(0)
+  stt           Float    @default(0) // Securities Transaction Tax
+  exchangeFee   Float    @default(0)
+  gst           Float    @default(0)
+  stampDuty     Float    @default(0)
+  sebiTurnover  Float    @default(0)
+  totalCost     Float
+  costPercentage Float   // Cost as percentage of trade value
+  
+  @@map("transaction_costs")
+}
+
+model BrokeragePlan {
+  id                String   @id @default(cuid())
+  brokerName        String
+  planName          String
+  equityDelivery    Float    // Per trade or percentage
+  equityIntraday    Float
+  equityFutures     Float
+  equityOptions     Float
+  currencyFutures   Float
+  currencyOptions   Float
+  commodityFutures  Float
+  commodityOptions  Float
+  dpCharges         Float    // Demat charges
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  
+  @@unique([brokerName, planName])
+  @@map("brokerage_plans")
+}
+
+// API Usage Monitoring
+model ApiUsage {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  endpoint      String   // quotes, orders, positions, etc.
+  method        String   // GET, POST, PUT, DELETE
+  requestCount  Int      @default(0)
+  errorCount    Int      @default(0)
+  avgResponseTime Float? // In milliseconds
+  date          DateTime @db.Date
+  hour          Int      // 0-23 for hourly tracking
+  
+  @@unique([userId, endpoint, method, date, hour])
+  @@map("api_usage")
+}
+
+model ApiQuota {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  endpoint      String
+  dailyLimit    Int
+  currentUsage  Int      @default(0)
+  resetTime     DateTime // When the quota resets
+  isExceeded    Boolean  @default(false)
+  
+  @@unique([userId, endpoint])
+  @@map("api_quotas")
+}
+
+model ApiError {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  endpoint     String
+  errorCode    String
+  errorMessage String
+  requestData  Json?
+  responseData Json?
+  timestamp    DateTime @default(now())
+  
+  @@map("api_errors")
+}
+
 // System logs
 model SystemLog {
   id        String   @id @default(cuid())
   level     String   // INFO, WARN, ERROR, DEBUG
   category  String   // AUTH, MARKET_DATA, STRATEGY, ORDER, etc.
-  messa`ge   String
+  message   String
   data      Json?    // Additional structured data
   timestamp DateTime @default(now())
   
@@ -190,4 +400,34 @@ model Config {
   updatedAt   DateTime @updatedAt
   
   @@map("configs")
+} 
+
+model ExchangeFeeConfig {
+  id                    String   @id @default(uuid())
+  exchangeId           String   @unique
+  brokerageFeePercent  Float
+  transactionTaxPercent Float
+  stampDutyPercent     Float
+  exchangeChargesPercent Float
+  gstPercent           Float
+  sebiChargesPercent   Float
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model TradingFees {
+  id              String   @id @default(uuid())
+  tradeId         String   @unique
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+  tradeValue      Float
+  action          String
+  brokerageFee    Float
+  transactionTax  Float
+  stampDuty       Float
+  exchangeCharges Float
+  gst             Float
+  sebiCharges     Float
+  totalFees       Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 } 

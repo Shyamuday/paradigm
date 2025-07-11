@@ -118,19 +118,73 @@ export class MarketDataService {
 
     async getLatestMarketData(symbol: string) {
         try {
-            const instrument = await this.getInstrumentBySymbol(symbol);
-            if (!instrument) {
-                return null;
-            }
-
-            const latestData = await db.marketData.findFirst({
-                where: { instrumentId: instrument.id },
-                orderBy: { timestamp: 'desc' },
+            const marketData = await db.marketData.findMany({
+                where: {
+                    instrument: {
+                        symbol
+                    }
+                },
+                orderBy: {
+                    timestamp: 'desc'
+                },
+                take: 1,
+                include: {
+                    instrument: true
+                }
             });
 
-            return latestData;
+            return marketData;
         } catch (error) {
             logger.error('Failed to get latest market data:', error);
+            throw error;
+        }
+    }
+
+    async getPreviousClose(symbol: string): Promise<number> {
+        try {
+            const previousDay = await db.marketData.findFirst({
+                where: {
+                    instrument: {
+                        symbol
+                    },
+                    timestamp: {
+                        lt: new Date(new Date().setHours(0, 0, 0, 0))
+                    }
+                },
+                orderBy: {
+                    timestamp: 'desc'
+                }
+            });
+
+            if (!previousDay?.close) {
+                throw new Error(`No previous close price found for ${symbol}`);
+            }
+
+            return previousDay.close;
+        } catch (error) {
+            logger.error('Failed to get previous close:', error);
+            throw error;
+        }
+    }
+
+    async getCurrentPrice(instrumentId: string): Promise<number> {
+        try {
+            const latestData = await db.marketData.findFirst({
+                where: {
+                    instrumentId
+                },
+                orderBy: {
+                    timestamp: 'desc'
+                }
+            });
+
+            if (!latestData?.ltp && !latestData?.close) {
+                throw new Error(`No current price found for instrument ${instrumentId}`);
+            }
+
+            return latestData.ltp || latestData.close!;
+        } catch (error) {
+            logger.error('Failed to get current price:', error);
             throw error;
         }
     }

@@ -46,7 +46,7 @@ export class OrderService {
                     status,
                     orderId: orderId || null,
                     executionTime: status === 'COMPLETE' ? new Date() : null,
-                    realizedPnL: executionPrice ? this.calculateRealizedPnL(tradeId, executionPrice) : null,
+                    realizedPnL: executionPrice ? await this.calculateRealizedPnL(tradeId, executionPrice) : null,
                 },
             });
 
@@ -215,7 +215,7 @@ export class OrderService {
                 data: {
                     currentPrice: closePrice,
                     closeTime: new Date(),
-                    realizedPnL: this.calculatePositionPnL(positionId, closePrice),
+                    realizedPnL: await this.calculatePositionPnL(positionId, closePrice),
                     unrealizedPnL: 0,
                 },
             });
@@ -267,14 +267,117 @@ export class OrderService {
         }
     }
 
-    private calculateRealizedPnL(tradeId: string, executionPrice: number): number {
-        // TODO: Implement P&L calculation based on trade type and execution price
+    private async calculateRealizedPnL(tradeId: string, executionPrice: number): Promise<number> {
+        try {
+            const trade = await db.trade.findUnique({
+                where: { id: tradeId },
+                include: {
+                    positions: true,
+                }
+            });
+
+            if (!trade) {
+                logger.error('Trade not found for P&L calculation:', tradeId);
+                return 0;
+            }
+
+            // For a closing trade, calculate P&L based on position
+            if (trade.positions.length > 0) {
+                const position = trade.positions[0]; // Get the related position
+                const pnl = await this.calculatePositionPnL(position, executionPrice);
+                return pnl;
+            }
+
+            // For an opening trade, P&L is 0 as position is just being established
+            return 0;
+        } catch (error) {
+            logger.error('Error calculating realized P&L:', error);
+            return 0;
+        }
+    }
+
+    private async calculatePositionPnL(position: any, closePrice: number): Promise<number> {
+        if (!position || !position.averagePrice || !position.quantity) {
+            return 0;
+        }
+
+        const entryPrice = position.averagePrice;
+        const quantity = position.quantity;
+        const side = position.side;
+
+        // Calculate P&L based on position side (LONG/SHORT)
+        if (side === 'LONG') {
+            return (closePrice - entryPrice) * quantity;
+        } else if (side === 'SHORT') {
+            return (entryPrice - closePrice) * quantity;
+        }
+
         return 0;
     }
 
-    private calculatePositionPnL(positionId: string, closePrice: number): number {
-        // TODO: Implement P&L calculation based on position and close price
-        return 0;
+    async updatePositionPnL(positionId: string, currentPrice: number) {
+        try {
+            const position = await db.position.findUnique({
+                where: { id: positionId },
+            });
+
+            if (!position) {
+                logger.error('Position not found for P&L update:', positionId);
+                return;
+            }
+
+            const unrealizedPnL = await this.calculatePositionPnL(position, currentPrice);
+
+            await db.position.update({
+                where: { id: positionId },
+                data: {
+                    currentPrice,
+                    unrealizedPnL,
+                },
+            });
+
+            logger.debug('Position P&L updated:', positionId, unrealizedPnL);
+        } catch (error) {
+            logger.error('Failed to update position P&L:', error);
+            throw error;
+        }
+    }
+
+    async getPositionMetrics(sessionId: string) {
+        try {
+            const positions = await db.position.findMany({
+                where: {
+                    sessionId,
+                    closeTime: null, // Only open positions
+                },
+                include: {
+                    instrument: true,
+                },
+            });
+
+            let totalValue = 0;
+            let totalUnrealizedPnL = 0;
+            let totalRealizedPnL = 0;
+
+            for (const position of positions) {
+                if (position.currentPrice && position.quantity) {
+                    totalValue += position.currentPrice * Math.abs(position.quantity);
+                    totalUnrealizedPnL += position.unrealizedPnL || 0;
+                    totalRealizedPnL += position.realizedPnL || 0;
+                }
+            }
+
+            return {
+                openPositions: positions.length,
+                totalPositionValue: totalValue,
+                totalUnrealizedPnL,
+                totalRealizedPnL,
+                netPnL: totalUnrealizedPnL + totalRealizedPnL,
+            };
+        } catch (error) {
+            logger.error('Failed to get position metrics:', error);
+            throw error;
+        }
     }
 
     async getSessionPnL(sessionId: string) {
@@ -297,6 +400,24 @@ export class OrderService {
             };
         } catch (error) {
             logger.error('Failed to get session P&L:', error);
+            throw error;
+        }
+    }
+
+    async getRecentTrades(limit: number = 10) {
+        try {
+            const trades = await db.trade.findMany({
+                take: limit,
+                orderBy: {
+                    orderTime: 'desc'
+                },
+                include: {
+                    instrument: true
+                }
+            });
+            return trades;
+        } catch (error) {
+            logger.error('Failed to get recent trades:', error);
             throw error;
         }
     }

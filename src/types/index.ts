@@ -57,16 +57,21 @@ export interface TradeOrder {
 
 export interface Position {
   id: string;
+  sessionId: string;
+  instrumentId: string;
+  instrument: Instrument;
   symbol: string;
   quantity: number;
   averagePrice: number;
-  currentPrice: number;
+  currentPrice: number | null;
   side: 'LONG' | 'SHORT';
-  stopLoss?: number;
-  target?: number;
-  unrealizedPnL: number;
+  stopLoss: number | null;
+  target: number | null;
+  trailingStop: boolean;
+  unrealizedPnL: number | null;
+  realizedPnL: number | null;
   openTime: Date;
-  closeTime?: Date;
+  closeTime: Date | null;
 }
 
 export interface StrategyConfig {
@@ -207,7 +212,7 @@ export interface TradingSession {
   status: 'active' | 'completed' | 'stopped';
 }
 
-export type EventType = 
+export type EventType =
   | 'tick_received'
   | 'signal_generated'
   | 'order_placed'
@@ -246,4 +251,225 @@ export interface PositionResult {
   success: boolean;
   position?: Position;
   error?: string;
+}
+
+// Risk Management Types
+export interface RiskProfile {
+  id: string;
+  userId: string;
+  maxDailyLoss: number;
+  maxDrawdown: number;
+  maxPositionSize: number;
+  riskPerTrade: number;
+  maxOpenTrades: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  var: number;
+  sharpeRatio: number;
+}
+
+export interface RiskMetrics {
+  id: string;
+  sessionId: string;
+  date: Date;
+  dailyPnL: number;
+  drawdown: number;
+  currentRisk: number;
+  var: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  winRate: number;
+  profitFactor: number;
+}
+
+// Alert System Types
+export type AlertType = 'PRICE' | 'VOLUME' | 'TECHNICAL_INDICATOR' | 'PNL' | 'RISK';
+export type AlertCondition = 'ABOVE' | 'BELOW' | 'CROSSES_ABOVE' | 'CROSSES_BELOW' | 'EQUALS';
+export type NotificationMethod = 'EMAIL' | 'SMS' | 'PUSH' | 'WEBHOOK';
+export type NotificationStatus = 'PENDING' | 'SENT' | 'FAILED';
+
+export interface Alert {
+  id: string;
+  userId: string;
+  instrumentId?: string;
+  type: AlertType;
+  condition: AlertCondition;
+  value: number;
+  currentValue?: number;
+  message?: string;
+  isActive: boolean;
+  isTriggered: boolean;
+  triggeredAt?: Date;
+  createdAt: Date;
+  notifications: AlertNotification[];
+}
+
+export interface AlertNotification {
+  id: string;
+  alertId: string;
+  method: NotificationMethod;
+  destination: string;
+  status: NotificationStatus;
+  sentAt?: Date;
+  createdAt: Date;
+}
+
+// Backtesting Types
+export interface BacktestResult {
+  id: string;
+  strategyId: string;
+  name: string;
+  startDate: Date;
+  endDate: Date;
+  initialCapital: number;
+  finalCapital: number;
+  totalReturn: number;
+  annualReturn: number;
+  maxDrawdown: number;
+  sharpeRatio?: number;
+  sortinoRatio?: number;
+  calmarRatio?: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  profitFactor: number;
+  averageWin: number;
+  averageLoss: number;
+  largestWin: number;
+  largestLoss: number;
+  consecutiveWins: number;
+  consecutiveLosses: number;
+  createdAt: Date;
+  trades: BacktestTrade[];
+}
+
+export interface BacktestTrade {
+  id: string;
+  backtestId: string;
+  instrumentId: string;
+  action: 'BUY' | 'SELL';
+  quantity: number;
+  entryPrice: number;
+  exitPrice?: number;
+  pnl?: number;
+  entryTime: Date;
+  exitTime?: Date;
+  holdingPeriod?: number;
+}
+
+// Transaction Cost Types
+export interface TransactionCost {
+  id: string;
+  tradeId: string;
+  brokerage: number;
+  stt: number;
+  exchangeFee: number;
+  gst: number;
+  stampDuty: number;
+  sebiTurnover: number;
+  totalCost: number;
+  costPercentage: number;
+}
+
+export interface BrokeragePlan {
+  id: string;
+  brokerName: string;
+  planName: string;
+  equityDelivery: number;
+  equityIntraday: number;
+  equityFutures: number;
+  equityOptions: number;
+  currencyFutures: number;
+  currencyOptions: number;
+  commodityFutures: number;
+  commodityOptions: number;
+  dpCharges: number;
+  isActive: boolean;
+  createdAt: Date;
+}
+
+// API Monitoring Types
+export interface ApiUsage {
+  id: string;
+  userId: string;
+  endpoint: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  requestCount: number;
+  errorCount: number;
+  avgResponseTime?: number;
+  date: Date;
+  hour: number;
+}
+
+export interface ApiQuota {
+  id: string;
+  userId: string;
+  endpoint: string;
+  dailyLimit: number;
+  currentUsage: number;
+  resetTime: Date;
+  isExceeded: boolean;
+}
+
+export interface ApiError {
+  id: string;
+  userId: string;
+  endpoint: string;
+  errorCode: string;
+  errorMessage: string;
+  requestData?: any;
+  responseData?: any;
+  timestamp: Date;
+}
+
+export interface Trade {
+  id: string;
+  sessionId: string;
+  instrumentId: string;
+  instrument: Instrument;
+  strategyId: string | null;
+  action: 'BUY' | 'SELL';
+  quantity: number;
+  price: number;
+  orderType: 'MARKET' | 'LIMIT' | 'SL' | 'SL-M';
+  orderId: string | null;
+  status: 'PENDING' | 'COMPLETE' | 'CANCELLED' | 'REJECTED';
+  stopLoss: number | null;
+  target: number | null;
+  trailingStop: boolean;
+  orderTime: Date;
+  executionTime: Date | null;
+  realizedPnL: number | null;
+  unrealizedPnL: number | null;
+}
+
+export interface MarketData {
+  id: string;
+  instrumentId: string;
+  instrument: Instrument;
+  symbol: string;
+  timestamp: Date;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+  ltp: number | null;
+  change: number | null;
+  changePercent: number | null;
+}
+
+export interface Instrument {
+  id: string;
+  symbol: string;
+  name: string;
+  exchange: string;
+  instrumentType: string;
+  lotSize: number;
+  tickSize: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 } 

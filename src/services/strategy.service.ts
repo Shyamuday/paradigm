@@ -2,6 +2,22 @@ import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import { StrategyConfig, TradeSignal, StrategyResult } from '../types';
 
+interface MovingAverageConfig {
+    shortPeriod: number;
+    longPeriod: number;
+    volumeThreshold?: number;
+}
+
+interface MarketDataPoint {
+    symbol: string;
+    timestamp: string | Date;
+    close?: number;
+    ltp?: number;
+    high?: number;
+    low?: number;
+    volume?: number;
+}
+
 export class StrategyService {
     async createStrategy(config: StrategyConfig) {
         try {
@@ -173,20 +189,72 @@ export class StrategyService {
         }
     }
 
-    private async generateSignals(strategy: any, marketData: any[]): Promise<TradeSignal[]> {
+    private async generateSignals(strategy: any, marketData: MarketDataPoint[]): Promise<TradeSignal[]> {
         const signals: TradeSignal[] = [];
 
-        // Simple Moving Average Strategy Example
         if (strategy.name === 'simple_ma') {
             const config = strategy.config as StrategyConfig;
-            const shortPeriod = config.parameters.shortPeriod || 10;
-            const longPeriod = config.parameters.longPeriod || 20;
+            const maConfig: MovingAverageConfig = {
+                shortPeriod: config.parameters?.shortPeriod || 10,
+                longPeriod: config.parameters?.longPeriod || 20,
+                volumeThreshold: config.parameters?.volumeThreshold
+            };
 
-            for (const data of marketData) {
-                // This is a simplified example - in practice you'd implement proper technical indicators
-                const signal = this.calculateMovingAverageSignal(data, shortPeriod, longPeriod);
-                if (signal) {
-                    signals.push(signal);
+            // Calculate moving averages for the entire dataset
+            const shortMA = this.calculateSMA(marketData, maConfig.shortPeriod);
+            const longMA = this.calculateSMA(marketData, maConfig.longPeriod);
+
+            // Look for crossovers
+            for (let i = 1; i < marketData.length; i++) {
+                const currentData = marketData[i];
+                const prevData = marketData[i - 1];
+
+                if (!currentData || !prevData) continue;
+
+                const currentShortMA = shortMA[i];
+                const currentLongMA = longMA[i];
+                const prevShortMA = shortMA[i - 1];
+                const prevLongMA = longMA[i - 1];
+
+                // Skip if we don't have enough data points or required data
+                if (!currentShortMA || !currentLongMA || !prevShortMA || !prevLongMA || !currentData.symbol) {
+                    continue;
+                }
+
+                // Check for volume threshold if configured
+                if (maConfig.volumeThreshold && (!currentData.volume || currentData.volume < maConfig.volumeThreshold)) {
+                    continue;
+                }
+
+                // Detect crossovers
+                const currentCrossover = currentShortMA - currentLongMA;
+                const previousCrossover = prevShortMA - prevLongMA;
+
+                let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
+
+                // Golden Cross (Short MA crosses above Long MA)
+                if (previousCrossover <= 0 && currentCrossover > 0) {
+                    action = 'BUY';
+                }
+                // Death Cross (Short MA crosses below Long MA)
+                else if (previousCrossover >= 0 && currentCrossover < 0) {
+                    action = 'SELL';
+                }
+
+                if (action !== 'HOLD') {
+                    const signal = this.createSignal(
+                        currentData,
+                        action,
+                        {
+                            shortMA: currentShortMA,
+                            longMA: currentLongMA,
+                            shortPeriod: maConfig.shortPeriod,
+                            longPeriod: maConfig.longPeriod
+                        }
+                    );
+                    if (signal) {
+                        signals.push(signal);
+                    }
                 }
             }
         }
@@ -194,37 +262,97 @@ export class StrategyService {
         return signals;
     }
 
-    private calculateMovingAverageSignal(data: any, shortPeriod: number, longPeriod: number): TradeSignal | null {
-        // Simplified moving average calculation
-        // In practice, you'd implement proper technical analysis
+    private calculateSMA(data: MarketDataPoint[], period: number): (number | null)[] {
+        const sma: (number | null)[] = new Array(data.length).fill(null);
+        let sum = 0;
+        let validPoints = 0;
 
-        const price = data.ltp || data.close;
-        const symbol = data.symbol;
+        // Calculate first SMA
+        for (let i = 0; i < data.length; i++) {
+            const price = data[i].close || data[i].ltp;
+            if (typeof price !== 'number') continue;
 
-        if (!price || !symbol) return null;
+            sum += price;
+            validPoints++;
 
-        // Generate a simple signal based on price movement
-        // This is a placeholder - implement actual MA crossover logic
-        const action = Math.random() > 0.7 ? (Math.random() > 0.5 ? 'BUY' : 'SELL') : 'HOLD';
+            if (i >= period - 1 && validPoints >= period) {
+                sma[i] = sum / period;
+                const oldDataPoint = data[i - (period - 1)];
+                if (oldDataPoint) {
+                    const oldPrice = oldDataPoint.close || oldDataPoint.ltp;
+                    if (typeof oldPrice === 'number') {
+                        sum -= oldPrice;
+                        validPoints--;
+                    }
+                }
+            }
+        }
 
-        if (action === 'HOLD') return null;
+        return sma;
+    }
+
+    private createSignal(
+        data: MarketDataPoint,
+        action: 'BUY' | 'SELL',
+        metadata: {
+            shortMA: number;
+            longMA: number;
+            shortPeriod: number;
+            longPeriod: number;
+        }
+    ): TradeSignal | null {
+        const price = data.close || data.ltp;
+        if (!price || !data.symbol) return null;
+
+        const atr = this.calculateATR(data);
+        if (!atr) return null;
+
+        // Calculate stop loss and target based on ATR
+        const stopLossMultiplier = 2;
+        const targetMultiplier = 3;
+        const stopLoss = action === 'BUY'
+            ? price - (atr * stopLossMultiplier)
+            : price + (atr * stopLossMultiplier);
+
+        const target = action === 'BUY'
+            ? price + (atr * targetMultiplier)
+            : price - (atr * targetMultiplier);
 
         return {
             id: `signal_${Date.now()}_${Math.random()}`,
             strategy: 'simple_ma',
-            symbol,
+            symbol: data.symbol,
             action,
-            quantity: 1,
+            quantity: 1, // This should be calculated based on position sizing rules
             price,
-            stopLoss: action === 'BUY' ? price * 0.98 : price * 1.02,
-            target: action === 'BUY' ? price * 1.05 : price * 0.95,
-            timestamp: new Date(),
+            stopLoss,
+            target,
+            timestamp: new Date(data.timestamp),
             metadata: {
-                shortPeriod,
-                longPeriod,
-                currentPrice: price,
-            },
+                ...metadata,
+                atr,
+                currentPrice: price
+            }
         };
+    }
+
+    private calculateATR(data: MarketDataPoint, period: number = 14): number | null {
+        const high = data.high;
+        const low = data.low;
+        const close = data.close || data.ltp;
+
+        if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
+            return null;
+        }
+
+        // Simplified ATR calculation
+        const tr = Math.max(
+            high - low,
+            Math.abs(high - close),
+            Math.abs(low - close)
+        );
+
+        return tr;
     }
 
     async getStrategyPerformance(strategyId: string) {
