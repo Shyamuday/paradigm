@@ -25,6 +25,84 @@ export interface CandleData {
   timestamp: Date;
 }
 
+// Multi-timeframe data interfaces
+export interface TimeframeConfig {
+  id: string;
+  name: string; // 1min, 3min, 5min, 15min, 30min, 1hour, 1day
+  description?: string;
+  intervalMinutes: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MultiTimeframeCandleData {
+  id: string;
+  instrumentId: string;
+  instrument: Instrument;
+  timeframeId: string;
+  timeframe: TimeframeConfig;
+  timestamp: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  typicalPrice?: number;
+  weightedPrice?: number;
+  priceChange?: number;
+  priceChangePercent?: number;
+  upperShadow?: number;
+  lowerShadow?: number;
+  bodySize?: number;
+  totalRange?: number;
+}
+
+export interface TickDataPoint {
+  id: string;
+  instrumentId: string;
+  instrument: Instrument;
+  timestamp: Date;
+  ltp: number;
+  volume: number;
+  change?: number;
+  changePercent?: number;
+}
+
+export interface VolumeProfileData {
+  id: string;
+  instrumentId: string;
+  instrument: Instrument;
+  timeframeId: string;
+  timeframe: TimeframeConfig;
+  date: Date;
+  priceLevel: number;
+  volume: number;
+  poc: boolean; // Point of Control
+}
+
+export interface TimeframeInterval {
+  name: string;
+  minutes: number;
+  description: string;
+}
+
+export interface CandleAggregationRequest {
+  symbol: string;
+  timeframe: string;
+  from: Date;
+  to: Date;
+  limit?: number;
+}
+
+export interface CandleAggregationResult {
+  symbol: string;
+  timeframe: string;
+  candles: MultiTimeframeCandleData[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
 export interface TradeSignal {
   id: string;
   strategy: string;
@@ -81,6 +159,365 @@ export interface StrategyConfig {
   parameters: Record<string, any>;
   capitalAllocation: number;
   instruments: string[];
+  // Enhanced strategy configuration
+  type: StrategyType;
+  version: string;
+  author?: string;
+  category: StrategyCategory;
+  riskLevel: RiskLevel;
+  timeframes: string[];
+  entryRules: StrategyRule[];
+  exitRules: StrategyRule[];
+  positionSizing: PositionSizingConfig;
+  riskManagement: RiskManagementConfig;
+  filters: StrategyFilter[];
+  notifications: NotificationConfig[];
+  backtestConfig?: BacktestConfig;
+  liveConfig?: LiveTradingConfig;
+}
+
+// Strategy Types
+export type StrategyType =
+  | 'TREND_FOLLOWING'
+  | 'MEAN_REVERSION'
+  | 'BREAKOUT'
+  | 'SCALPING'
+  | 'ARBITRAGE'
+  | 'PAIRS_TRADING'
+  | 'OPTIONS_STRATEGY'
+  | 'FUTURES_STRATEGY'
+  | 'CUSTOM'
+  | 'MACHINE_LEARNING'
+  | 'QUANTITATIVE'
+  | 'DISCRETIONARY';
+
+export type StrategyCategory =
+  | 'TECHNICAL_ANALYSIS'
+  | 'FUNDAMENTAL_ANALYSIS'
+  | 'QUANTITATIVE'
+  | 'MACHINE_LEARNING'
+  | 'ARBITRAGE'
+  | 'OPTIONS'
+  | 'FUTURES'
+  | 'FOREX'
+  | 'CRYPTO'
+  | 'CUSTOM';
+
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+
+// Strategy Rules
+export interface StrategyRule {
+  id: string;
+  name: string;
+  type: RuleType;
+  condition: RuleCondition;
+  parameters: Record<string, any>;
+  priority: number;
+  isActive: boolean;
+  description?: string;
+}
+
+export type RuleType =
+  | 'ENTRY'
+  | 'EXIT'
+  | 'FILTER'
+  | 'CONFIRMATION'
+  | 'REVERSAL'
+  | 'CUSTOM';
+
+export type RuleCondition =
+  | 'AND'
+  | 'OR'
+  | 'NOT'
+  | 'IF_THEN'
+  | 'IF_THEN_ELSE'
+  | 'CUSTOM';
+
+// Position Sizing
+export interface PositionSizingConfig {
+  method: PositionSizingMethod;
+  fixedAmount?: number;
+  percentageOfCapital?: number;
+  riskPerTrade?: number;
+  kellyCriterion?: boolean;
+  volatilityBased?: boolean;
+  customFormula?: string;
+  maxPositionSize?: number;
+  minPositionSize?: number;
+}
+
+export type PositionSizingMethod =
+  | 'FIXED_AMOUNT'
+  | 'PERCENTAGE_OF_CAPITAL'
+  | 'RISK_PER_TRADE'
+  | 'KELLY_CRITERION'
+  | 'VOLATILITY_BASED'
+  | 'CUSTOM_FORMULA';
+
+// Risk Management
+export interface RiskManagementConfig {
+  stopLoss: StopLossConfig;
+  takeProfit: TakeProfitConfig;
+  trailingStop?: TrailingStopConfig;
+  maxDrawdown: number;
+  maxDailyLoss: number;
+  maxOpenPositions: number;
+  correlationLimit?: number;
+  sectorExposure?: number;
+  leverageLimit?: number;
+}
+
+export interface StopLossConfig {
+  type: StopLossType;
+  value: number;
+  atrMultiplier?: number;
+  percentage?: number;
+  fixedAmount?: number;
+  timeBased?: boolean;
+  timeLimit?: number;
+}
+
+export type StopLossType =
+  | 'FIXED_POINTS'
+  | 'PERCENTAGE'
+  | 'ATR_BASED'
+  | 'TIME_BASED'
+  | 'CUSTOM';
+
+export interface TakeProfitConfig {
+  type: TakeProfitType;
+  value: number;
+  atrMultiplier?: number;
+  percentage?: number;
+  fixedAmount?: number;
+  partialExit?: PartialExitConfig[];
+}
+
+export type TakeProfitType =
+  | 'FIXED_POINTS'
+  | 'PERCENTAGE'
+  | 'ATR_BASED'
+  | 'RISK_REWARD_RATIO'
+  | 'CUSTOM';
+
+export interface PartialExitConfig {
+  percentage: number;
+  target: number;
+  stopLoss?: number;
+}
+
+export interface TrailingStopConfig {
+  enabled: boolean;
+  type: TrailingStopType;
+  value: number;
+  activationLevel?: number;
+  lockInProfit?: boolean;
+}
+
+export type TrailingStopType =
+  | 'FIXED_POINTS'
+  | 'PERCENTAGE'
+  | 'ATR_BASED'
+  | 'CUSTOM';
+
+// Strategy Filters
+export interface StrategyFilter {
+  id: string;
+  name: string;
+  type: FilterType;
+  parameters: Record<string, any>;
+  isActive: boolean;
+  description?: string;
+}
+
+export type FilterType =
+  | 'TIME_FILTER'
+  | 'VOLUME_FILTER'
+  | 'VOLATILITY_FILTER'
+  | 'TREND_FILTER'
+  | 'MARKET_CONDITION'
+  | 'CORRELATION_FILTER'
+  | 'NEWS_FILTER'
+  | 'CUSTOM_FILTER';
+
+// Notifications
+export interface NotificationConfig {
+  id: string;
+  type: NotificationType;
+  conditions: NotificationCondition[];
+  channels: NotificationChannel[];
+  isActive: boolean;
+}
+
+export type NotificationType =
+  | 'SIGNAL_GENERATED'
+  | 'POSITION_OPENED'
+  | 'POSITION_CLOSED'
+  | 'STOP_LOSS_HIT'
+  | 'TAKE_PROFIT_HIT'
+  | 'DRAWDOWN_ALERT'
+  | 'PERFORMANCE_UPDATE'
+  | 'ERROR_ALERT';
+
+export interface NotificationCondition {
+  metric: string;
+  operator: 'GT' | 'LT' | 'EQ' | 'GTE' | 'LTE';
+  value: number;
+}
+
+export interface NotificationChannel {
+  type: 'EMAIL' | 'SMS' | 'PUSH' | 'WEBHOOK' | 'TELEGRAM' | 'DISCORD';
+  config: Record<string, any>;
+}
+
+// Backtest Configuration
+export interface BacktestConfig {
+  startDate: Date;
+  endDate: Date;
+  initialCapital: number;
+  commission: number;
+  slippage: number;
+  dataSource: string;
+  timeframes: string[];
+  instruments: string[];
+  warmupPeriod: number;
+  includeDividends: boolean;
+  includeCorporateActions: boolean;
+}
+
+// Live Trading Configuration
+export interface LiveTradingConfig {
+  executionMode: ExecutionMode;
+  orderTypes: OrderType[];
+  executionDelay: number;
+  maxSlippage: number;
+  retryAttempts: number;
+  retryDelay: number;
+  marketHoursOnly: boolean;
+  preMarket: boolean;
+  postMarket: boolean;
+}
+
+export type ExecutionMode =
+  | 'PAPER_TRADING'
+  | 'LIVE_TRADING'
+  | 'SIMULATION'
+  | 'HYBRID';
+
+export type OrderType =
+  | 'MARKET'
+  | 'LIMIT'
+  | 'STOP_LOSS'
+  | 'STOP_LIMIT'
+  | 'TRAILING_STOP'
+  | 'BRACKET_ORDER'
+  | 'COVER_ORDER';
+
+// Technical Indicators
+export interface TechnicalIndicator {
+  name: string;
+  type: IndicatorType;
+  parameters: Record<string, any>;
+  timeframe: string;
+  description?: string;
+}
+
+export type IndicatorType =
+  | 'MOVING_AVERAGE'
+  | 'RSI'
+  | 'MACD'
+  | 'BOLLINGER_BANDS'
+  | 'STOCHASTIC'
+  | 'ATR'
+  | 'ADX'
+  | 'CCI'
+  | 'WILLIAMS_R'
+  | 'OBV'
+  | 'VWAP'
+  | 'PIVOT_POINTS'
+  | 'FIBONACCI'
+  | 'ICHIMOKU'
+  | 'PARABOLIC_SAR'
+  | 'CUSTOM';
+
+// Strategy Performance Metrics
+export interface StrategyPerformance {
+  id: string;
+  strategyId: string;
+  period: string;
+  startDate: Date;
+  endDate: Date;
+  totalReturn: number;
+  annualizedReturn: number;
+  sharpeRatio: number;
+  sortinoRatio: number;
+  calmarRatio: number;
+  maxDrawdown: number;
+  winRate: number;
+  profitFactor: number;
+  averageWin: number;
+  averageLoss: number;
+  largestWin: number;
+  largestLoss: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  averageHoldingPeriod: number;
+  volatility: number;
+  beta: number;
+  alpha: number;
+  informationRatio: number;
+  treynorRatio: number;
+  jensenAlpha: number;
+  createdAt: Date;
+}
+
+// Strategy State
+export interface StrategyState {
+  id: string;
+  strategyId: string;
+  status: StrategyStatus;
+  currentPositions: Position[];
+  pendingSignals: TradeSignal[];
+  lastExecutionTime: Date;
+  nextExecutionTime?: Date;
+  errorCount: number;
+  lastError?: string;
+  performanceMetrics: Partial<StrategyPerformance>;
+  isHealthy: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type StrategyStatus =
+  | 'ACTIVE'
+  | 'PAUSED'
+  | 'STOPPED'
+  | 'ERROR'
+  | 'MAINTENANCE'
+  | 'BACKTESTING';
+
+// Strategy Template
+export interface StrategyTemplate {
+  id: string;
+  name: string;
+  description: string;
+  type: StrategyType;
+  category: StrategyCategory;
+  riskLevel: RiskLevel;
+  defaultParameters: Record<string, any>;
+  requiredParameters: string[];
+  optionalParameters: string[];
+  defaultTimeframes: string[];
+  defaultInstruments: string[];
+  exampleConfig: StrategyConfig;
+  documentation: string;
+  tags: string[];
+  isPublic: boolean;
+  author: string;
+  version: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface RiskConfig {

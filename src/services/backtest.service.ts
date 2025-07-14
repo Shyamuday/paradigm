@@ -1,10 +1,12 @@
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import { MarketDataService } from './market-data.service';
-import { StrategyService } from './strategy.service';
+import { EnhancedStrategyService } from './enhanced-strategy.service';
 import { OrderService } from './order.service';
 import { TransactionCostService } from './transaction-cost.service';
-import { Prisma, BacktestResult as PrismaBacktestResult, Strategy } from '@prisma/client';
+import { OptionsTechnicalAnalysisService } from './options-technical-analysis';
+import { TimeframeManagerService } from './timeframe-manager.service';
+import { Prisma, BacktestResult as PrismaBacktestResult, Strategy, Instrument } from '@prisma/client';
 
 interface BacktestConfig {
     startDate: Date;
