@@ -61,27 +61,38 @@ export class DashboardManager {
             // Only fetch data if authenticated
             const authStatus = this.authManager.getStatus();
             if (authStatus.isAuthenticated) {
-                // Fetch market data
-                const rawMarketData = await this.marketDataService.getLatestMarketData();
-                const marketData: MarketData[] = rawMarketData.map(data => ({
-                    id: data.id,
-                    instrumentId: data.instrumentId,
-                    instrument: {
-                        ...data.instrument,
-                        lotSize: data.instrument.lotSize || 0,
-                        tickSize: data.instrument.tickSize || 0
-                    },
-                    symbol: data.instrument.symbol,
-                    timestamp: data.timestamp,
-                    open: data.open || null,
-                    high: data.high || null,
-                    low: data.low || null,
-                    close: data.close || null,
-                    volume: data.volume || null,
-                    ltp: data.ltp || null,
-                    change: data.change || null,
-                    changePercent: data.changePercent || null
-                }));
+                // Get all active instruments first
+                const instruments = await this.marketDataService.getAllInstruments();
+                const marketData: MarketData[] = [];
+
+                // Fetch market data for each instrument
+                for (const instrument of instruments.slice(0, 10)) { // Limit to first 10 for performance
+                    try {
+                        const rawMarketData = await this.marketDataService.getLatestMarketData(instrument.symbol);
+                        const mappedData: MarketData[] = rawMarketData.map(data => ({
+                            id: data.id,
+                            instrumentId: data.instrumentId,
+                            instrument: {
+                                ...data.instrument,
+                                lotSize: data.instrument.lotSize || 0,
+                                tickSize: data.instrument.tickSize || 0
+                            },
+                            symbol: data.instrument.symbol,
+                            timestamp: data.timestamp,
+                            open: data.open || null,
+                            high: data.high || null,
+                            low: data.low || null,
+                            close: data.close || null,
+                            volume: data.volume || null,
+                            ltp: data.ltp || null,
+                            change: data.change || null,
+                            changePercent: data.changePercent || null
+                        }));
+                        marketData.push(...mappedData);
+                    } catch (error) {
+                        logger.warn(`Failed to fetch market data for ${instrument.symbol}:`, error);
+                    }
+                }
                 this.dashboard.updateMarketData(marketData);
 
                 // Fetch positions

@@ -275,8 +275,8 @@ export class TerminalDashboard extends EventEmitter {
             pos.symbol,
             pos.quantity.toString(),
             pos.averagePrice.toFixed(2),
-            pos.currentPrice.toFixed(2),
-            pos.unrealizedPnL.toFixed(2)
+            pos.currentPrice?.toFixed(2) ?? 'N/A',
+            pos.unrealizedPnL?.toFixed(2) ?? 'N/A'
         ]);
 
         this.positionsTable.setData({
@@ -311,7 +311,7 @@ export class TerminalDashboard extends EventEmitter {
             x: x,
             y: y,
             style: {
-                line: y[y.length - 1] >= 0 ? 'green' : 'red'
+                line: (y.length > 0 && y[y.length - 1] >= 0) ? 'green' : 'red'
             }
         }]);
         this.screen.render();
