@@ -15,6 +15,10 @@
     "prisma:studio": "prisma studio",
     "auth:test": "ts-node src/auth/auto-totp-example.ts",
     "auth:auto": "ts-node src/auth/auto-totp-example.ts",
+    "tokens:all": "ts-node src/examples/simple-tokens-manager.ts",
+    "tokens:advanced": "ts-node src/examples/instruments-data-manager.ts",
+    "trading:demo": "ts-node src/examples/complete-trading-integration.ts",
+    "orders:test": "ts-node -e \"import('./src/examples/order-management-example.ts')\"",
     "bot:test": "ts-node src/test-complete-system.ts",
     "dashboard": "ts-node src/ui/run-dashboard.ts"
   },
@@ -35,6 +39,7 @@
     "dotenv": "^16.3.1",
     "eventemitter2": "^6.4.9",
     "express": "^4.18.2",
+    "kiteconnect": "^5.0.1",
     "lodash": "^4.17.21",
     "moment": "^2.29.4",
     "node-cron": "^3.0.3",
