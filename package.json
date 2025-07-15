@@ -18,6 +18,10 @@
     "tokens:all": "ts-node src/examples/simple-tokens-manager.ts",
     "tokens:advanced": "ts-node src/examples/instruments-data-manager.ts",
     "trading:demo": "ts-node src/examples/complete-trading-integration.ts",
+    "trading:simple": "ts-node src/examples/simple-trading-example.ts",
+    "trading:automated": "ts-node src/examples/automated-trading-example.ts",
+    "trading:test": "ts-node src/test-trading-system.ts",
+    "setup": "ts-node src/setup-trading-system.ts",
     "orders:test": "ts-node -e \"import('./src/examples/order-management-example.ts')\"",
     "bot:test": "ts-node src/test-complete-system.ts",
     "dashboard": "ts-node src/ui/run-dashboard.ts"
