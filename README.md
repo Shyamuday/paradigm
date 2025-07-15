@@ -40,6 +40,7 @@ This project uses a **fully automatic TOTP-based authentication** system for Zer
 ### 📚 Documentation
 
 - **[AUTO_TOTP_SETUP.md](docs/AUTO_TOTP_SETUP.md)** - Complete setup guide
+- **[TOKENS_AND_DATA_MANAGEMENT.md](docs/TOKENS_AND_DATA_MANAGEMENT.md)** - Get all tokens and manage data manually
 - **[Project Documentation](docs/PROJECT_DOCUMENTATION.md)** - Full project overview
 
 ## Features
@@ -114,8 +115,18 @@ This project uses a **fully automatic TOTP-based authentication** system for Zer
 
 ## Available Scripts
 
+### Authentication
+
 - `npm run auth:test` - Test automatic TOTP authentication
 - `npm run auth:auto` - Run authentication example
+
+### Tokens & Market Data
+
+- `npm run tokens:all` - Get all available tokens and manage data manually
+- `npm run tokens:advanced` - Advanced instruments data management
+
+### Trading Bot
+
 - `npm run dev` - Start the trading bot
 - `npm run dashboard` - Launch terminal dashboard
 - `npm run bot:test` - Test complete system
