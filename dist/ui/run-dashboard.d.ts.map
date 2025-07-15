@@ -1,0 +1,1 @@
+{"version":3,"file":"run-dashboard.d.ts","sourceRoot":"","sources":["../../src/ui/run-dashboard.ts"],"names":[],"mappings":"AAQA,qBAAa,gBAAgB;IACzB,OAAO,CAAC,SAAS,CAAoB;IACrC,OAAO,CAAC,iBAAiB,CAAoB;IAC7C,OAAO,CAAC,YAAY,CAAe;IACnC,OAAO,CAAC,eAAe,CAAkB;IACzC,OAAO,CAAC,WAAW,CAAqB;IACxC,OAAO,CAAC,cAAc,CAA+B;;IAarD,OAAO,CAAC,mBAAmB;YA+Bb,WAAW;IAqHZ,KAAK;CAarB"}

@@ -141,6 +141,7 @@ export interface Position {
   symbol: string;
   quantity: number;
   averagePrice: number;
+  entryPrice: number;
   currentPrice: number | null;
   side: 'LONG' | 'SHORT';
   stopLoss: number | null;
@@ -150,6 +151,14 @@ export interface Position {
   realizedPnL: number | null;
   openTime: Date;
   closeTime: Date | null;
+  entryTime: Date;
+  exitTime?: Date;
+  exitPrice?: number;
+  exitReason?: string;
+  status: 'OPEN' | 'CLOSED' | 'CLOSING';
+  strategyName: string;
+  highestPrice?: number;
+  lowestPrice?: number;
 }
 
 export interface StrategyConfig {
@@ -181,6 +190,7 @@ export type StrategyType =
   | 'TREND_FOLLOWING'
   | 'MEAN_REVERSION'
   | 'BREAKOUT'
+  | 'MOMENTUM'
   | 'SCALPING'
   | 'ARBITRAGE'
   | 'PAIRS_TRADING'
@@ -641,12 +651,18 @@ export interface SystemLog {
 
 export interface TradingSession {
   id: string;
-  userId: string;
+  userId?: string;
   startTime: Date;
-  endTime?: Date;
-  mode: 'paper' | 'live' | 'backtest';
-  capital: number;
-  status: 'active' | 'completed' | 'stopped';
+  endTime?: Date | null;
+  mode?: 'paper' | 'live' | 'backtest';
+  capital?: number;
+  status: 'ACTIVE' | 'COMPLETED' | 'STOPPED';
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  totalPnL: number;
+  maxDrawdown: number;
+  config?: any;
 }
 
 export type EventType =
