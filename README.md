@@ -1,6 +1,46 @@
 # Paradigm Trading System
 
-A comprehensive trading system with real-time market data processing, strategy execution, and terminal-based UI.
+A comprehensive trading system with **automatic TOTP-based authentication** for Zerodha, real-time market data processing, strategy execution, and terminal-based UI.
+
+## 🔐 Authentication System
+
+This project uses a **fully automatic TOTP-based authentication** system for Zerodha. No manual input required!
+
+### Key Features
+
+- **🚀 Fully Automatic**: Zero manual intervention required
+- **🔒 TOTP-Only**: Uses Time-based One-Time Passwords for secure authentication
+- **💾 Session Management**: Automatically saves and reuses sessions
+- **🔄 Auto-Retry**: Automatically re-authenticates when sessions expire
+- **⚡ Fast**: Direct API calls without browser automation
+
+### Quick Setup
+
+1. **Configure your credentials** in `.env`:
+
+   ```env
+   ZERODHA_API_KEY=your_api_key_here
+   ZERODHA_API_SECRET=your_api_secret_here
+   ZERODHA_USER_ID=your_zerodha_user_id
+   ZERODHA_PASSWORD=your_zerodha_password
+   ZERODHA_TOTP_SECRET=your_base32_totp_secret
+   ```
+
+2. **Test authentication**:
+
+   ```bash
+   npm run auth:test
+   ```
+
+3. **Start the bot**:
+   ```bash
+   npm run dev
+   ```
+
+### 📚 Documentation
+
+- **[AUTO_TOTP_SETUP.md](docs/AUTO_TOTP_SETUP.md)** - Complete setup guide
+- **[Project Documentation](docs/PROJECT_DOCUMENTATION.md)** - Full project overview
 
 ## Features
 
@@ -30,7 +70,6 @@ A comprehensive trading system with real-time market data processing, strategy e
 - Position and order monitoring
 - P&L visualization
 - Authentication status
-- TOTP handling
 - Multi-panel layout
 
 ### Data Processing
@@ -40,161 +79,129 @@ A comprehensive trading system with real-time market data processing, strategy e
 - Historical data access
 - Database integration
 
-### Authentication & Security
-
-- Session management
-- TOTP verification
-- API quota monitoring
-- Error tracking
-
 ## Getting Started
 
-1. Clone the repository
-2. Copy `env.example` to `.env` and configure your environment variables
-3. Install dependencies:
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd paradigm
+   ```
+
+2. **Install dependencies**
+
    ```bash
    npm install
    ```
-4. Initialize the database:
+
+3. **Setup environment variables**
+
    ```bash
-   npx prisma migrate dev
+   cp env.example .env
+   # Edit .env with your credentials
    ```
-5. Start the terminal dashboard:
+
+4. **Test authentication**
+
    ```bash
-   npm run dashboard
+   npm run auth:test
    ```
 
-## Configuration
+5. **Start the trading bot**
+   ```bash
+   npm run dev
+   ```
 
-### Trading Strategy
+## Available Scripts
 
-Configure strategy parameters in `config/trading-config.yaml`:
+- `npm run auth:test` - Test automatic TOTP authentication
+- `npm run auth:auto` - Run authentication example
+- `npm run dev` - Start the trading bot
+- `npm run dashboard` - Launch terminal dashboard
+- `npm run bot:test` - Test complete system
 
-```yaml
-strategies:
-  simple_ma:
-    enabled: true
-    description: "Simple Moving Average Crossover"
-    parameters:
-      short_period: 10
-      long_period: 20
-      capital_allocation: 0.3 # 30% of capital
-    instruments:
-      - "NIFTY"
-      - "BANKNIFTY"
-```
+## 🔧 Authentication Methods
 
-### Risk Management
-
-Set risk parameters in `config/trading-config.yaml`:
-
-```yaml
-risk:
-  default_stop_loss_percentage: 2.0
-  trailing_stop_loss: true
-  max_risk_per_trade: 0.02 # 2% of capital per trade
-  max_portfolio_risk: 0.1 # 10% of capital total risk
-```
-
-## Architecture
-
-### Services
-
-- `StrategyService`: Implements trading strategies and signal generation
-  - Moving average crossover with volume filtering
-  - Technical analysis calculations (SMA, ATR)
-  - Signal generation with dynamic risk parameters
-- `OrderService`: Handles trade execution and position management
-  - P&L calculations for trades and positions
-  - Position tracking and updates
-  - Order status management
-- `MarketDataService`: Processes and stores market data
-  - Real-time tick data processing
-  - Historical data management
-  - Instrument configuration
-- `AuthManagerService`: Handles authentication and session management
-  - API authentication
-  - Session tracking
-  - TOTP verification
-
-### Database
-
-PostgreSQL database with Prisma ORM:
-
-- Market data storage
-- Trade and position tracking
-- User authentication
-- System configuration
-
-### UI
-
-Terminal-based dashboard using blessed and blessed-contrib:
-
-- Multiple data panels
-- Real-time updates
-- Interactive commands
-- Status monitoring
-
-## Development
-
-### Adding New Strategies
-
-1. Create a new strategy class in `src/services/strategies/`
-2. Implement the strategy interface
-3. Add configuration in `config/trading-config.yaml`
-4. Register the strategy in `StrategyService`
-
-Example strategy implementation:
+### Method 1: Simple Helper Function
 
 ```typescript
-async generateSignals(marketData: MarketDataPoint[]): Promise<TradeSignal[]> {
-    // Calculate technical indicators
-    const shortMA = calculateSMA(marketData, shortPeriod);
-    const longMA = calculateSMA(marketData, longPeriod);
+import { createAutoTOTPAuth } from "./src/auth/easy-auth";
 
-    // Generate signals on crossovers
-    const signals = [];
-    for (let i = 1; i < marketData.length; i++) {
-        const currentCrossover = shortMA[i] - longMA[i];
-        const previousCrossover = shortMA[i-1] - longMA[i-1];
-
-        if (previousCrossover <= 0 && currentCrossover > 0) {
-            signals.push(createBuySignal(marketData[i]));
-        } else if (previousCrossover >= 0 && currentCrossover < 0) {
-            signals.push(createSellSignal(marketData[i]));
-        }
-    }
-    return signals;
-}
+const auth = await createAutoTOTPAuth(); // Automatic!
+const profile = await auth.apiCall("/user/profile");
 ```
 
-### Testing
+### Method 2: Direct Configuration
 
-```bash
-npm test
+```typescript
+import { AutoTOTPZerodhaAuth } from "./src/auth/easy-auth";
+
+const auth = new AutoTOTPZerodhaAuth({
+  apiKey: "your_api_key",
+  apiSecret: "your_api_secret",
+  userId: "your_user_id",
+  password: "your_password",
+  totpSecret: "your_base32_totp_secret",
+});
+
+await auth.authenticate();
 ```
 
-### Logging
+## 📁 Project Structure
 
-Logs are stored in:
+```
+paradigm/
+├── src/
+│   ├── auth/                 # TOTP-based authentication
+│   │   ├── easy-auth.ts      # Main authentication class
+│   │   └── auto-totp-example.ts # Example usage
+│   ├── services/             # Core trading services
+│   ├── ui/                   # Terminal dashboard
+│   └── types/                # TypeScript definitions
+├── docs/                     # Documentation
+├── config/                   # Configuration files
+└── logs/                     # Application logs
+```
 
-- `logs/trading-bot.log`: General application logs
-- `logs/error.log`: Error tracking
+## 🔒 Security Features
 
-## API Documentation
+- All credentials stored in environment variables
+- Session tokens automatically managed
+- TOTP secrets never logged or exposed
+- Automatic session validation and renewal
 
-See `docs/API_AUTHENTICATION.md` for API authentication details.
+## 🐛 Troubleshooting
 
-## Terminal UI Guide
+1. **Authentication Issues**: Check that all environment variables are set correctly
+2. **TOTP Problems**: Ensure your system time is accurate
+3. **Session Errors**: Delete `data/zerodha-auto-session.json` to force re-authentication
 
-See `docs/TERMINAL_UI.md` for detailed UI usage instructions.
+For detailed troubleshooting, see the [AUTO_TOTP_SETUP.md](docs/AUTO_TOTP_SETUP.md) guide.
 
-## Contributing
+## 📊 API Usage
 
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+Once authenticated, you can use any Zerodha API endpoint:
 
-## License
+```typescript
+const auth = await createAutoTOTPAuth();
 
-MIT License
+// Get user profile
+const profile = await auth.apiCall("/user/profile");
+
+// Get portfolio
+const holdings = await auth.apiCall("/portfolio/holdings");
+
+// Place order
+const order = await auth.apiCall("/orders/regular", "POST", {
+  exchange: "NSE",
+  tradingsymbol: "RELIANCE",
+  transaction_type: "BUY",
+  quantity: 1,
+  order_type: "MARKET",
+  product: "CNC",
+});
+```
+
+---
+
+**🎉 Ready to trade with automatic TOTP authentication!**

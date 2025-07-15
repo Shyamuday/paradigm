@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import dotenv from 'dotenv';
 import { logger } from './logger/logger';
 import { ConfigManager } from './config/config-manager';
-import { ZerodhaApiAuth, ZerodhaApiAuthConfig } from './auth/zerodha-api-auth';
+import { AutoTOTPZerodhaAuth, AutoTOTPConfig } from './auth/easy-auth';
 import { DatabaseManager } from './database/database';
 import { UserService } from './services/user.service';
 import { MarketDataService } from './services/market-data.service';
@@ -16,7 +16,7 @@ dotenv.config();
 class TradingBot {
   private configManager: ConfigManager;
   private databaseManager: DatabaseManager;
-  private authManager?: ZerodhaApiAuth;
+  private authManager?: AutoTOTPZerodhaAuth;
   private userService: UserService;
   private marketDataService: MarketDataService;
   private orderService: OrderService;
@@ -73,30 +73,25 @@ class TradingBot {
 
   private async initializeAuthentication(): Promise<void> {
     try {
-      const authConfig: ZerodhaApiAuthConfig = {
-        apiKey: process.env.ZERODHA_API_KEY || '4kii2cglymgxjpqq',
-        apiSecret: process.env.ZERODHA_API_SECRET || 'fmapqarltxl0lhyetqeasfgjias6ov3h',
-        userId: process.env.ZERODHA_USER_ID || 'XB7556',
-        password: process.env.ZERODHA_PASSWORD || 'Lumia620@',
+      const authConfig: AutoTOTPConfig = {
+        apiKey: process.env.ZERODHA_API_KEY || '',
+        apiSecret: process.env.ZERODHA_API_SECRET || '',
+        userId: process.env.ZERODHA_USER_ID || '',
+        password: process.env.ZERODHA_PASSWORD || '',
         totpSecret: process.env.ZERODHA_TOTP_SECRET || '',
         redirectUri: process.env.ZERODHA_REDIRECT_URI || 'https://127.0.0.1'
       };
 
-      this.authManager = new ZerodhaApiAuth(authConfig);
+      this.authManager = new AutoTOTPZerodhaAuth(authConfig);
 
-      // Set up event listeners
-      this.authManager.on('login_success', (session) => {
-        logger.info('🎉 Zerodha login successful!');
-        logger.info('   User ID:', session.userId);
-        logger.info('   Access Token:', session.accessToken.substring(0, 10) + '...');
-        logger.info('   Token Expires:', session.tokenExpiryTime);
-      });
+      // Authenticate automatically
+      const session = await this.authManager.authenticate();
 
-      this.authManager.on('login_failed', (error) => {
-        logger.error('❌ Zerodha login failed:', error.message);
-      });
+      logger.info('🎉 Zerodha TOTP authentication successful!');
+      logger.info('   User ID:', session.userId);
+      logger.info('   Access Token:', session.accessToken.substring(0, 10) + '...');
+      logger.info('   Token Expires:', session.expiryTime);
 
-      await this.authManager.initialize();
     } catch (error) {
       logger.error('Failed to initialize authentication:', error);
       throw error;
