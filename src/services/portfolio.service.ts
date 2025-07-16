@@ -2,6 +2,7 @@ import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import { MarketDataService } from './market-data.service';
 import { OrderService } from './order.service';
+import { KiteConnect, Position as KitePosition, Holding as KiteHolding } from 'kiteconnect';
 import {
     PortfolioMetrics,
     PortfolioAllocation,
@@ -15,14 +16,25 @@ export class PortfolioService {
     private marketDataService: MarketDataService;
     private orderService: OrderService;
 
-    constructor() {
-        this.marketDataService = new MarketDataService();
-        this.orderService = new OrderService();
+    constructor(
+        private kite: KiteConnect,
+        marketDataService: MarketDataService,
+        orderService: OrderService
+    ) {
+        this.marketDataService = marketDataService;
+        this.orderService = orderService;
     }
 
     async getPortfolioMetrics(sessionId: string): Promise<PortfolioMetrics> {
         try {
-            const positions = await this.getPositions(sessionId);
+            // Get positions from both Zerodha and database
+            const [zerodhaPositions, dbPositions] = await Promise.all([
+                this.getZerodhaPositions(),
+                this.getPositions(sessionId)
+            ]);
+
+            // Merge positions data
+            const positions = await this.mergePositionsData(zerodhaPositions, dbPositions);
             const historicalReturns = await this.getHistoricalReturns(sessionId);
 
             const totalValue = positions.reduce((sum, pos) => sum + pos.value, 0);
@@ -48,6 +60,86 @@ export class PortfolioService {
         }
     }
 
+    private async getZerodhaPositions(): Promise<KitePosition[]> {
+        try {
+            const positions = await this.kite.getPositions();
+            return positions.net;
+        } catch (error) {
+            logger.error('Failed to get Zerodha positions:', error);
+            return [];
+        }
+    }
+
+    private async getZerodhaHoldings(): Promise<KiteHolding[]> {
+        try {
+            return await this.kite.getHoldings();
+        } catch (error) {
+            logger.error('Failed to get Zerodha holdings:', error);
+            return [];
+        }
+    }
+
+    private async mergePositionsData(
+        zerodhaPositions: KitePosition[],
+        dbPositions: PortfolioPosition[]
+    ): Promise<PortfolioPosition[]> {
+        const mergedPositions: PortfolioPosition[] = [];
+
+        // Process Zerodha positions
+        for (const zPos of zerodhaPositions) {
+            const dbPos = dbPositions.find(p =>
+                p.instrument.symbol === zPos.tradingsymbol &&
+                p.instrument.exchange === zPos.exchange
+            );
+
+            if (dbPos) {
+                // Update existing position with real-time data
+                mergedPositions.push({
+                    ...dbPos,
+                    currentPrice: zPos.last_price,
+                    value: zPos.value,
+                    unrealizedPnL: zPos.unrealised,
+                    realizedPnL: zPos.realised,
+                    quantity: zPos.quantity,
+                    averagePrice: zPos.average_price,
+                    dayChange: zPos.day_change,
+                    dayChangePercent: zPos.day_change_percentage
+                });
+            } else {
+                // Create new position entry
+                const instrument = await db.instrument.findFirst({
+                    where: {
+                        symbol: zPos.tradingsymbol,
+                        exchange: zPos.exchange
+                    }
+                });
+
+                if (instrument) {
+                    mergedPositions.push({
+                        instrumentId: instrument.id,
+                        instrument,
+                        quantity: zPos.quantity,
+                        averagePrice: zPos.average_price,
+                        currentPrice: zPos.last_price,
+                        value: zPos.value,
+                        unrealizedPnL: zPos.unrealised,
+                        realizedPnL: zPos.realised,
+                        dayChange: zPos.day_change,
+                        dayChangePercent: zPos.day_change_percentage,
+                        weight: 0 // Will be calculated later
+                    });
+                }
+            }
+        }
+
+        // Calculate weights
+        const totalValue = mergedPositions.reduce((sum, pos) => sum + pos.value, 0);
+        return mergedPositions.map(pos => ({
+            ...pos,
+            weight: totalValue > 0 ? pos.value / totalValue : 0
+        }));
+    }
+
     async getPositions(sessionId: string): Promise<PortfolioPosition[]> {
         try {
             const positions = await db.position.findMany({
@@ -60,25 +152,35 @@ export class PortfolioService {
                 }
             });
 
-            const totalValue = positions.reduce((sum, pos) =>
-                sum + (pos.quantity * (pos.currentPrice || pos.averagePrice)), 0);
+            // Get real-time data from Zerodha
+            const zerodhaPositions = await this.getZerodhaPositions();
+            const zerodhaHoldings = await this.getZerodhaHoldings();
 
             return Promise.all(positions.map(async (pos) => {
-                const currentPrice = pos.currentPrice || pos.averagePrice;
-                const value = pos.quantity * currentPrice;
-                const weight = value / totalValue;
+                // Try to find matching Zerodha position or holding
+                const zPos = zerodhaPositions.find(p =>
+                    p.tradingsymbol === pos.instrument.symbol &&
+                    p.exchange === pos.instrument.exchange
+                );
 
-                // Get day's change
-                const previousClose = await this.marketDataService.getPreviousClose(pos.instrument.symbol);
-                const dayChange = currentPrice - previousClose;
-                const dayChangePercent = (dayChange / previousClose) * 100;
+                const zHolding = zerodhaHoldings.find(h =>
+                    h.tradingsymbol === pos.instrument.symbol &&
+                    h.exchange === pos.instrument.exchange
+                );
+
+                // Use real-time data if available
+                const currentPrice = zPos?.last_price || zHolding?.last_price || pos.currentPrice || pos.averagePrice;
+                const value = pos.quantity * currentPrice;
 
                 return {
                     ...pos,
-                    weight,
+                    currentPrice,
                     value,
-                    dayChange,
-                    dayChangePercent
+                    unrealizedPnL: zPos?.unrealised || zHolding?.pnl || pos.unrealizedPnL,
+                    realizedPnL: zPos?.realised || pos.realizedPnL,
+                    dayChange: zPos?.day_change || zHolding?.day_change || 0,
+                    dayChangePercent: zPos?.day_change_percentage || zHolding?.day_change_percentage || 0,
+                    weight: 0 // Will be calculated after all positions are processed
                 };
             }));
         } catch (error) {

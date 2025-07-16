@@ -2,12 +2,14 @@ import 'reflect-metadata';
 import dotenv from 'dotenv';
 import { logger } from './logger/logger';
 import { ConfigManager } from './config/config-manager';
-import { AutoTOTPZerodhaAuth, AutoTOTPConfig } from './auth/easy-auth';
-import { DatabaseManager } from './database/database';
+import { ZerodhaAuth } from './auth/zerodha-auth';
+import { db } from './database/database';
 import { UserService } from './services/user.service';
 import { MarketDataService } from './services/market-data.service';
 import { OrderService } from './services/order.service';
 import { StrategyService } from './services/strategy.service';
+import { OrderManagerService } from './services/order-manager.service';
+import { InstrumentsManager } from './services/instruments-manager.service';
 import { InstrumentConfig } from './types';
 
 // Load environment variables
@@ -15,12 +17,13 @@ dotenv.config();
 
 class TradingBot {
   private configManager: ConfigManager;
-  private databaseManager: DatabaseManager;
-  private authManager?: AutoTOTPZerodhaAuth;
+  private authManager?: ZerodhaAuth;
   private userService: UserService;
-  private marketDataService: MarketDataService;
+  private marketDataService?: MarketDataService;
   private orderService: OrderService;
   private strategyService: StrategyService;
+  private orderManagerService?: OrderManagerService;
+  private instrumentsManager?: InstrumentsManager;
   private currentSessionId?: string;
   private isRunning: boolean = false;
 
@@ -29,9 +32,7 @@ class TradingBot {
 
     // Initialize core components
     this.configManager = new ConfigManager();
-    this.databaseManager = DatabaseManager.getInstance();
     this.userService = new UserService();
-    this.marketDataService = new MarketDataService();
     this.orderService = new OrderService();
     this.strategyService = new StrategyService();
   }
@@ -44,23 +45,19 @@ class TradingBot {
       await this.configManager.loadConfig();
       logger.info('✅ Configuration loaded');
 
-      // 2. Connect to database
-      await this.databaseManager.connect();
-      logger.info('✅ Database connected');
-
-      // 3. Initialize authentication
+      // 2. Initialize authentication
       await this.initializeAuthentication();
       logger.info('✅ Authentication initialized');
 
-      // 4. Initialize market data
+      // 3. Initialize market data
       await this.initializeMarketData();
       logger.info('✅ Market data initialized');
 
-      // 5. Initialize strategies
+      // 4. Initialize strategies
       await this.initializeStrategies();
       logger.info('✅ Trading strategies initialized');
 
-      // 6. Create or load user session
+      // 5. Create or load user session
       await this.initializeUserSession();
       logger.info('✅ User session initialized');
 
@@ -73,24 +70,17 @@ class TradingBot {
 
   private async initializeAuthentication(): Promise<void> {
     try {
-      const authConfig: AutoTOTPConfig = {
-        apiKey: process.env.ZERODHA_API_KEY || '',
-        apiSecret: process.env.ZERODHA_API_SECRET || '',
-        userId: process.env.ZERODHA_USER_ID || '',
-        password: process.env.ZERODHA_PASSWORD || '',
-        totpSecret: process.env.ZERODHA_TOTP_SECRET || '',
-        redirectUri: process.env.ZERODHA_REDIRECT_URI || 'https://127.0.0.1'
-      };
+      this.authManager = new ZerodhaAuth();
 
-      this.authManager = new AutoTOTPZerodhaAuth(authConfig);
+      // Check if we have a valid session
+      const hasValidSession = await this.authManager.hasValidSession();
 
-      // Authenticate automatically
-      const session = await this.authManager.authenticate();
+      if (!hasValidSession) {
+        logger.info('🔄 No valid session found, starting OAuth login...');
+        await this.authManager.startOAuthLogin();
+      }
 
-      logger.info('🎉 Zerodha TOTP authentication successful!');
-      logger.info('   User ID:', session.userId);
-      logger.info('   Access Token:', session.accessToken.substring(0, 10) + '...');
-      logger.info('   Token Expires:', session.expiryTime);
+      logger.info('🎉 Zerodha authentication successful!');
 
     } catch (error) {
       logger.error('Failed to initialize authentication:', error);
@@ -100,20 +90,22 @@ class TradingBot {
 
   private async initializeMarketData(): Promise<void> {
     try {
-      const marketDataConfig = this.configManager.getMarketDataConfig();
-
-      // Create instruments from config
-      for (const instrumentConfig of marketDataConfig.instruments) {
-        try {
-          const existingInstrument = await this.marketDataService.getInstrumentBySymbol(instrumentConfig.symbol);
-          if (!existingInstrument) {
-            await this.marketDataService.createInstrument(instrumentConfig);
-            logger.info('📈 Instrument created:', instrumentConfig.symbol);
-          }
-        } catch (error) {
-          logger.warn('Failed to create instrument:', instrumentConfig.symbol, error);
-        }
+      if (!this.authManager) {
+        throw new Error('Authentication not initialized');
       }
+
+      // Initialize instruments manager
+      this.instrumentsManager = new InstrumentsManager(this.authManager);
+
+      // Initialize market data service
+      this.marketDataService = new MarketDataService(this.instrumentsManager, this.authManager.getKite());
+
+      // Initialize order manager
+      if (this.currentSessionId) {
+        this.orderManagerService = new OrderManagerService(this.authManager.getKite(), this.currentSessionId);
+      }
+
+      logger.info('✅ Market data services initialized');
     } catch (error) {
       logger.error('Failed to initialize market data:', error);
       throw error;
@@ -122,19 +114,32 @@ class TradingBot {
 
   private async initializeStrategies(): Promise<void> {
     try {
-      const strategiesConfig = this.configManager.getStrategiesConfig();
+      // Create default strategies
+      const defaultStrategies = [
+        {
+          name: 'Moving Average Crossover',
+          description: 'Simple moving average crossover strategy',
+          enabled: true,
+          parameters: {
+            shortPeriod: 10,
+            longPeriod: 20,
+            volumeThreshold: 1000
+          },
+          capitalAllocation: 0.1,
+          instruments: ['RELIANCE', 'TCS', 'INFY']
+        }
+      ];
 
-      for (const [strategyName, strategyConfig] of Object.entries(strategiesConfig)) {
-        try {
-          const existingStrategy = await this.strategyService.getStrategyByName(strategyName);
-          if (!existingStrategy) {
-            await this.strategyService.createStrategy(strategyConfig);
-            logger.info('📊 Strategy created:', strategyName);
-          }
-        } catch (error) {
-          logger.warn('Failed to create strategy:', strategyName, error);
+      // Create strategies if they don't exist
+      for (const strategyConfig of defaultStrategies) {
+        const existing = await this.strategyService.getStrategyByName(strategyConfig.name);
+        if (!existing) {
+          await this.strategyService.createStrategy(strategyConfig as any);
+          logger.info(`✅ Created strategy: ${strategyConfig.name}`);
         }
       }
+
+      logger.info('✅ Strategies initialized');
     } catch (error) {
       logger.error('Failed to initialize strategies:', error);
       throw error;
@@ -143,28 +148,34 @@ class TradingBot {
 
   private async initializeUserSession(): Promise<void> {
     try {
-      const tradingConfig = this.configManager.getTradingConfig();
-
-      // Create a default user if none exists
-      let user = await this.userService.getUserByEmail('bot@paradigm.com');
-      if (!user) {
-        const newUser = await this.userService.createUser('bot@paradigm.com', 'Paradigm Trading Bot');
-        user = await this.userService.getUserByEmail('bot@paradigm.com');
-      }
+      // Create or get default user
+      let user = await this.userService.getUserByEmail('trader@paradigm.com');
 
       if (!user) {
-        throw new Error('Failed to create or find user');
+        user = await this.userService.createUser('trader@paradigm.com', 'Paradigm Trader');
+        logger.info('✅ Default user created');
       }
 
-      // Create a new trading session
+      // Create trading session
       const session = await this.userService.createTradingSession(user.id, {
-        mode: tradingConfig.mode,
-        capital: tradingConfig.capital,
-        status: 'active',
+        mode: 'paper',
+        capital: 100000,
+        config: {
+          maxPositionSize: 10000,
+          maxOpenPositions: 5,
+          maxDailyLoss: 5000
+        }
       });
 
       this.currentSessionId = session.id;
-      logger.info('📊 Trading session created:', session.id);
+      logger.info('✅ Trading session created:', session.id);
+
+      // Initialize order manager with session
+      if (this.authManager && this.currentSessionId) {
+        const kite = this.authManager.getKite();
+        this.orderManagerService = new OrderManagerService(kite, this.currentSessionId);
+      }
+
     } catch (error) {
       logger.error('Failed to initialize user session:', error);
       throw error;
@@ -173,208 +184,109 @@ class TradingBot {
 
   async start(): Promise<void> {
     try {
-      logger.info('🚀 Starting trading bot...');
-
-      if (!this.authManager) {
-        throw new Error('Authentication manager not initialized');
+      if (this.isRunning) {
+        logger.warn('Bot is already running');
+        return;
       }
 
-      const session = this.authManager.getSession();
-      if (!session) {
-        throw new Error('No active authentication session');
-      }
-
+      await this.initialize();
       this.isRunning = true;
-      logger.info('✅ Trading bot started successfully');
 
-      // Start the main trading loop
-      this.startTradingLoop();
+      logger.info('🚀 Trading bot started successfully');
+
+      // Start main trading loop
+      await this.runTradingLoop();
 
     } catch (error) {
-      logger.error('❌ Failed to start bot:', error);
+      logger.error('Failed to start trading bot:', error);
       throw error;
     }
   }
 
-  private async startTradingLoop(): Promise<void> {
+  private async runTradingLoop(): Promise<void> {
     logger.info('🔄 Starting trading loop...');
 
     while (this.isRunning) {
       try {
-        await this.executeTradingCycle();
+        // Get active strategies
+        const strategies = await this.strategyService.getActiveStrategies();
 
-        // Wait 1 minute before next cycle
-        await new Promise(resolve => setTimeout(resolve, 60000));
-      } catch (error) {
-        logger.error('❌ Error in trading loop:', error);
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds on error
-      }
-    }
-  }
+        for (const strategy of strategies) {
+          // Generate mock market data for testing
+          const mockMarketData = this.generateMockMarketData();
 
-  private async executeTradingCycle(): Promise<void> {
-    try {
-      if (!this.currentSessionId) {
-        throw new Error('No active trading session');
-      }
-
-      logger.debug('📊 Executing trading cycle...');
-
-      // 1. Get market data
-      const marketData = await this.getMarketData();
-
-      // 2. Execute active strategies
-      const activeStrategies = await this.strategyService.getActiveStrategies();
-
-      for (const strategy of activeStrategies) {
-        try {
-          const result = await this.strategyService.executeStrategy(strategy.name, marketData);
+          // Execute strategy
+          const result = await this.strategyService.executeStrategy(strategy.name, mockMarketData);
 
           if (result.success && result.signals.length > 0) {
-            logger.info(`📈 Strategy ${strategy.name} generated ${result.signals.length} signals`);
+            logger.info(`📊 Strategy ${strategy.name} generated ${result.signals.length} signals`);
 
-            // 3. Process signals and create trades
+            // Process signals
             for (const signal of result.signals) {
-              await this.processSignal(signal, strategy.id);
+              if (this.orderManagerService) {
+                try {
+                  const orderId = await this.orderManagerService.placeOrder(signal);
+                  logger.info(`📋 Order placed: ${orderId} for ${signal.symbol}`);
+                } catch (error) {
+                  logger.error('Failed to place order:', error);
+                }
+              }
             }
           }
-        } catch (error) {
-          logger.error(`❌ Error executing strategy ${strategy.name}:`, error);
         }
+
+        // Wait before next iteration
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+      } catch (error) {
+        logger.error('Error in trading loop:', error);
+        await new Promise(resolve => setTimeout(resolve, 10000));
       }
-
-      // 4. Update open positions
-      await this.updateOpenPositions();
-
-    } catch (error) {
-      logger.error('❌ Error in trading cycle:', error);
     }
   }
 
-  private async getMarketData(): Promise<any[]> {
-    try {
-      const instruments = await this.marketDataService.getAllInstruments();
-      const marketData = [];
+  private generateMockMarketData() {
+    // Generate mock market data for testing
+    const symbols = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICIBANK'];
+    const data = [];
 
-      for (const instrument of instruments) {
-        const latestData = await this.marketDataService.getLatestMarketData(instrument.symbol);
-        if (latestData) {
-          marketData.push({
-            symbol: instrument.symbol,
-            ltp: latestData.ltp,
-            open: latestData.open,
-            high: latestData.high,
-            low: latestData.low,
-            close: latestData.close,
-            volume: latestData.volume,
-            timestamp: latestData.timestamp,
-          });
-        }
+    for (let i = 0; i < 50; i++) {
+      const basePrice = 1000 + Math.random() * 1000;
+      const timestamp = new Date(Date.now() - (50 - i) * 60000);
+
+      for (const symbol of symbols) {
+        data.push({
+          symbol,
+          timestamp,
+          close: basePrice + Math.random() * 100 - 50,
+          ltp: basePrice + Math.random() * 100 - 50,
+          volume: Math.floor(Math.random() * 10000) + 1000
+        });
       }
-
-      return marketData;
-    } catch (error) {
-      logger.error('Failed to get market data:', error);
-      return [];
     }
-  }
 
-  private async processSignal(signal: any, strategyId: string): Promise<void> {
-    try {
-      if (!this.currentSessionId) return;
-
-      logger.info(`📊 Processing signal: ${signal.action} ${signal.symbol} at ${signal.price}`);
-
-      // Create trade from signal
-      const trade = await this.orderService.createTrade(this.currentSessionId, signal, strategyId);
-
-      // In a real implementation, you would:
-      // 1. Apply risk management checks
-      // 2. Send order to broker (Zerodha)
-      // 3. Update trade status based on execution
-
-      logger.info(`✅ Trade created: ${trade.id}`);
-    } catch (error) {
-      logger.error('Failed to process signal:', error);
-    }
-  }
-
-  private async updateOpenPositions(): Promise<void> {
-    try {
-      if (!this.currentSessionId) return;
-
-      const openPositions = await this.orderService.getOpenPositions(this.currentSessionId);
-
-      for (const position of openPositions) {
-        // Update position with current market price
-        const latestData = await this.marketDataService.getLatestMarketData(position.instrument.symbol);
-        if (latestData?.ltp) {
-          await this.orderService.updatePosition(position.id, {
-            currentPrice: latestData.ltp,
-            unrealizedPnL: this.calculateUnrealizedPnL(position, latestData.ltp),
-          });
-        }
-      }
-    } catch (error) {
-      logger.error('Failed to update open positions:', error);
-    }
-  }
-
-  private calculateUnrealizedPnL(position: any, currentPrice: number): number {
-    const quantity = position.quantity;
-    const averagePrice = position.averagePrice;
-    const side = position.side;
-
-    if (side === 'LONG') {
-      return quantity * (currentPrice - averagePrice);
-    } else {
-      return quantity * (averagePrice - currentPrice);
-    }
+    return data;
   }
 
   async stop(): Promise<void> {
     try {
       logger.info('🛑 Stopping trading bot...');
-
       this.isRunning = false;
 
+      // Cleanup market data service
+      if (this.marketDataService) {
+        this.marketDataService.cleanup();
+      }
+
+      // End trading session
       if (this.currentSessionId) {
-        await this.userService.stopTradingSession(this.currentSessionId);
+        await this.userService.endTradingSession(this.currentSessionId);
       }
-
-      if (this.authManager) {
-        await this.authManager.logout();
-      }
-
-      await this.databaseManager.disconnect();
 
       logger.info('✅ Trading bot stopped successfully');
     } catch (error) {
-      logger.error('❌ Failed to stop bot:', error);
+      logger.error('Error stopping trading bot:', error);
       throw error;
-    }
-  }
-
-  async getStatus(): Promise<any> {
-    try {
-      const session = this.authManager?.getSession();
-      const currentSession = this.currentSessionId ? await this.userService.getTradingSession(this.currentSessionId) : null;
-      const pnl = this.currentSessionId ? await this.orderService.getSessionPnL(this.currentSessionId) : null;
-
-      return {
-        isRunning: this.isRunning,
-        authentication: {
-          isAuthenticated: !!session,
-          userId: session?.userId,
-          tokenExpiry: session?.tokenExpiryTime,
-        },
-        session: currentSession,
-        pnl,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      logger.error('Failed to get status:', error);
-      return { error: error instanceof Error ? error.message : 'Unknown error' };
     }
   }
 }
@@ -383,32 +295,33 @@ class TradingBot {
 async function main() {
   const bot = new TradingBot();
 
+  // Handle graceful shutdown
+  process.on('SIGINT', async () => {
+    logger.info('Received SIGINT, shutting down gracefully...');
+    await bot.stop();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    logger.info('Received SIGTERM, shutting down gracefully...');
+    await bot.stop();
+    process.exit(0);
+  });
+
   try {
-    await bot.initialize();
     await bot.start();
-
-    // Handle graceful shutdown
-    process.on('SIGINT', async () => {
-      logger.info('🛑 Received SIGINT, shutting down gracefully...');
-      await bot.stop();
-      process.exit(0);
-    });
-
-    process.on('SIGTERM', async () => {
-      logger.info('🛑 Received SIGTERM, shutting down gracefully...');
-      await bot.stop();
-      process.exit(0);
-    });
-
   } catch (error) {
-    logger.error('💥 Fatal error in main:', error);
+    logger.error('Failed to start trading bot:', error);
     process.exit(1);
   }
 }
 
-// Start the bot if this file is run directly
+// Run the bot
 if (require.main === module) {
-  main();
+  main().catch(error => {
+    logger.error('Unhandled error:', error);
+    process.exit(1);
+  });
 }
 
-export default TradingBot; 
+export { TradingBot }; 
