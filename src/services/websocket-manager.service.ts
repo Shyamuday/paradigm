@@ -1,234 +1,203 @@
-import { ZerodhaAuth } from '../auth/zerodha-auth';
-import { logger } from '../logger/logger';
-import { EventEmitter } from 'events';
 import { KiteConnect } from 'kiteconnect';
+import { EventEmitter } from 'events';
+import { logger } from '../logger/logger';
 
-export interface TickData {
-    instrument_token: number;
-    mode: string;
-    tradable: boolean;
-    last_price: number;
-    last_quantity: number;
-    average_price: number;
+interface TickData {
+    instrumentToken: number;
+    lastPrice: number;
     volume: number;
-    buy_quantity: number;
-    sell_quantity: number;
-    ohlc: {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-    };
+    buyQuantity: number;
+    sellQuantity: number;
+    lastTradeTime: Date;
+    averageTradePrice: number;
+    openPrice: number;
+    highPrice: number;
+    lowPrice: number;
+    closePrice: number;
     change: number;
-    last_trade_time: Date;
-    oi?: number;
-    oi_day_high?: number;
-    oi_day_low?: number;
 }
 
 export class WebSocketManager extends EventEmitter {
-    private auth: ZerodhaAuth;
-    private ws: any = null;
-    private subscribedTokens: Set<number> = new Set();
-    private isConnected: boolean = false;
+    private ws: any; // KiteTicker instance
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 5;
-    private reconnectInterval: number = 5000;
+    private reconnectDelay: number = 5000; // 5 seconds
+    private subscribedTokens: Set<number> = new Set();
+    private isConnected: boolean = false;
 
-    constructor(auth: ZerodhaAuth) {
+    constructor(private kite: KiteConnect) {
         super();
-        this.auth = auth;
+        this.setupWebSocket();
     }
 
-    /**
-     * Connect to Zerodha WebSocket
-     */
-    async connect(): Promise<void> {
+    private setupWebSocket(): void {
         try {
-            logger.info('🔌 Connecting to Zerodha WebSocket...');
-
             // Import KiteConnect WebSocket
             const KiteTicker = require('kiteconnect').KiteTicker;
-            const kite = this.auth.getKite();
 
-            if (!this.auth.checkSession()) {
-                throw new Error('No active session found');
+            // Get API key and access token from KiteConnect instance
+            const apiKey = (this.kite as any).options.api_key;
+            const accessToken = (this.kite as any).access_token;
+
+            if (!apiKey || !accessToken) {
+                throw new Error('Missing API key or access token');
             }
 
-            // Create ticker instance
+            // Initialize WebSocket connection
             this.ws = new KiteTicker({
-                api_key: kite.getApiKey(),
-                access_token: kite.getAccessToken()
+                api_key: apiKey,
+                access_token: accessToken
             });
 
-            // Set up event handlers
+            // Setup event handlers
             this.setupEventHandlers();
-
-            // Connect
-            this.ws.connect();
-
         } catch (error) {
-            logger.error('❌ WebSocket connection failed:', error);
+            logger.error('Failed to setup WebSocket:', error);
             throw error;
         }
     }
 
-    /**
-     * Setup WebSocket event handlers
-     */
     private setupEventHandlers(): void {
-        this.ws.on('ticks', (ticks: any[]) => {
-            const processedTicks: TickData[] = ticks.map(tick => ({
-                instrument_token: tick.instrument_token,
-                mode: tick.mode,
-                tradable: tick.tradable,
-                last_price: tick.last_price,
-                last_quantity: tick.last_quantity,
-                average_price: tick.average_price,
-                volume: tick.volume,
-                buy_quantity: tick.buy_quantity,
-                sell_quantity: tick.sell_quantity,
-                ohlc: tick.ohlc,
-                change: tick.change,
-                last_trade_time: new Date(tick.last_trade_time),
-                oi: tick.oi,
-                oi_day_high: tick.oi_day_high,
-                oi_day_low: tick.oi_day_low
-            }));
-
-            this.emit('ticks', processedTicks);
-        });
-
         this.ws.on('connect', () => {
-            logger.info('✅ WebSocket connected');
+            logger.info('WebSocket connected');
             this.isConnected = true;
             this.reconnectAttempts = 0;
-            this.emit('connected');
 
             // Resubscribe to tokens if any
             if (this.subscribedTokens.size > 0) {
-                this.resubscribe();
+                this.subscribe(Array.from(this.subscribedTokens));
             }
+
+            this.emit('connected');
         });
 
-        this.ws.on('disconnect', (error: any) => {
-            logger.warn('⚠️ WebSocket disconnected:', error);
-            this.isConnected = false;
-            this.emit('disconnected', error);
-            this.handleReconnection();
+        this.ws.on('ticks', (ticks: any[]) => {
+            ticks.forEach(tick => {
+                const formattedTick: TickData = {
+                    instrumentToken: tick.instrument_token,
+                    lastPrice: tick.last_price,
+                    volume: tick.volume,
+                    buyQuantity: tick.buy_quantity,
+                    sellQuantity: tick.sell_quantity,
+                    lastTradeTime: new Date(tick.last_trade_time),
+                    averageTradePrice: tick.average_trade_price,
+                    openPrice: tick.ohlc.open,
+                    highPrice: tick.ohlc.high,
+                    lowPrice: tick.ohlc.low,
+                    closePrice: tick.ohlc.close,
+                    change: tick.change
+                };
+
+                this.emit('tick', formattedTick);
+            });
         });
 
-        this.ws.on('error', (error: any) => {
-            logger.error('❌ WebSocket error:', error);
+        this.ws.on('error', (error: Error) => {
+            logger.error('WebSocket error:', error);
             this.emit('error', error);
         });
 
-        this.ws.on('reconnect', (reconnect_count: number, reconnect_interval: number) => {
-            logger.info(`🔄 WebSocket reconnecting... Attempt ${reconnect_count}`);
-            this.emit('reconnecting', { count: reconnect_count, interval: reconnect_interval });
+        this.ws.on('close', () => {
+            logger.warn('WebSocket connection closed');
+            this.isConnected = false;
+            this.handleReconnect();
+            this.emit('disconnected');
         });
 
         this.ws.on('noreconnect', () => {
-            logger.error('❌ WebSocket max reconnection attempts reached');
-            this.emit('noreconnect');
+            logger.error('WebSocket reconnection failed');
+            this.emit('reconnect_failed');
+        });
+
+        this.ws.on('order_update', (order: any) => {
+            logger.info('Order update received:', order);
+            this.emit('order_update', order);
         });
     }
 
-    /**
-     * Subscribe to instrument tokens
-     */
-    subscribe(tokens: number[], mode: 'ltp' | 'quote' | 'full' = 'full'): void {
-        if (!this.isConnected) {
-            logger.warn('⚠️ WebSocket not connected, storing tokens for later subscription');
-        }
-
-        tokens.forEach(token => this.subscribedTokens.add(token));
-
-        if (this.isConnected && this.ws) {
-            logger.info(`📡 Subscribing to ${tokens.length} tokens in ${mode} mode`);
-            this.ws.subscribe(tokens);
-            this.ws.setMode(mode, tokens);
-        }
-    }
-
-    /**
-     * Unsubscribe from instrument tokens
-     */
-    unsubscribe(tokens: number[]): void {
-        tokens.forEach(token => this.subscribedTokens.delete(token));
-
-        if (this.isConnected && this.ws) {
-            logger.info(`📡 Unsubscribing from ${tokens.length} tokens`);
-            this.ws.unsubscribe(tokens);
-        }
-    }
-
-    /**
-     * Resubscribe to all tokens after reconnection
-     */
-    private resubscribe(): void {
-        if (this.subscribedTokens.size > 0) {
-            const tokens = Array.from(this.subscribedTokens);
-            logger.info(`🔄 Resubscribing to ${tokens.length} tokens`);
-            this.ws.subscribe(tokens);
-            this.ws.setMode('full', tokens);
-        }
-    }
-
-    /**
-     * Handle reconnection logic
-     */
-    private handleReconnection(): void {
+    private handleReconnect(): void {
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.reconnectAttempts++;
-            logger.info(`🔄 Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${this.reconnectInterval}ms`);
+            logger.info(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
 
             setTimeout(() => {
-                this.connect().catch(error => {
-                    logger.error('❌ Reconnection failed:', error);
-                });
-            }, this.reconnectInterval);
+                try {
+                    this.connect();
+                } catch (error) {
+                    logger.error('Reconnection attempt failed:', error);
+                }
+            }, this.reconnectDelay * this.reconnectAttempts);
         } else {
-            logger.error('❌ Max reconnection attempts reached');
-            this.emit('max_reconnection_attempts');
+            logger.error('Max reconnection attempts reached');
+            this.emit('max_reconnects_reached');
         }
     }
 
-    /**
-     * Disconnect from WebSocket
-     */
-    disconnect(): void {
-        if (this.ws) {
-            logger.info('🔌 Disconnecting WebSocket...');
+    public connect(): void {
+        try {
+            this.ws.connect();
+            this.ws.enableReconnect();
+        } catch (error) {
+            logger.error('Failed to connect WebSocket:', error);
+            throw error;
+        }
+    }
+
+    public disconnect(): void {
+        try {
             this.ws.disconnect();
             this.isConnected = false;
+            this.subscribedTokens.clear();
+        } catch (error) {
+            logger.error('Failed to disconnect WebSocket:', error);
+            throw error;
         }
     }
 
-    /**
-     * Get connection status
-     */
-    getConnectionStatus(): {
-        connected: boolean;
-        subscribedTokens: number[];
-        reconnectAttempts: number;
-    } {
-        return {
-            connected: this.isConnected,
-            subscribedTokens: Array.from(this.subscribedTokens),
-            reconnectAttempts: this.reconnectAttempts
-        };
+    public subscribe(tokens: number[]): void {
+        try {
+            if (!this.isConnected) {
+                throw new Error('WebSocket is not connected');
+            }
+
+            // Add tokens to tracking set
+            tokens.forEach(token => this.subscribedTokens.add(token));
+
+            // Subscribe to tokens
+            this.ws.subscribe(tokens);
+            this.ws.setMode('full', tokens); // Set mode to full for OHLC data
+
+            logger.info(`Subscribed to tokens: ${tokens.join(', ')}`);
+        } catch (error) {
+            logger.error('Failed to subscribe to tokens:', error);
+            throw error;
+        }
     }
 
-    /**
-     * Clear all subscriptions
-     */
-    clearSubscriptions(): void {
-        if (this.isConnected && this.ws && this.subscribedTokens.size > 0) {
-            const tokens = Array.from(this.subscribedTokens);
+    public unsubscribe(tokens: number[]): void {
+        try {
+            if (!this.isConnected) {
+                throw new Error('WebSocket is not connected');
+            }
+
+            // Remove tokens from tracking set
+            tokens.forEach(token => this.subscribedTokens.delete(token));
+
+            // Unsubscribe from tokens
             this.ws.unsubscribe(tokens);
+
+            logger.info(`Unsubscribed from tokens: ${tokens.join(', ')}`);
+        } catch (error) {
+            logger.error('Failed to unsubscribe from tokens:', error);
+            throw error;
         }
-        this.subscribedTokens.clear();
-        logger.info('🧹 All subscriptions cleared');
+    }
+
+    public isWebSocketConnected(): boolean {
+        return this.isConnected;
+    }
+
+    public getSubscribedTokens(): number[] {
+        return Array.from(this.subscribedTokens);
     }
 }

@@ -6,28 +6,29 @@ export class OrderService {
     async createTrade(sessionId: string, signal: TradeSignal, strategyId?: string) {
         try {
             // Get instrument
-            const instrument = await db.instrument.findUnique({
-                where: { symbol: signal.symbol },
-            });
+            const instrument = await db.findUnique('Instrument', { symbol: signal.symbol });
 
             if (!instrument) {
                 throw new Error(`Instrument not found: ${signal.symbol}`);
             }
 
-            const trade = await db.trade.create({
-                data: {
-                    sessionId,
-                    instrumentId: instrument.id,
-                    strategyId: strategyId || null,
-                    action: signal.action,
-                    quantity: signal.quantity,
-                    price: signal.price,
-                    orderType: 'MARKET', // Default to market order
-                    status: 'PENDING',
-                    stopLoss: signal.stopLoss || null,
-                    target: signal.target || null,
-                    trailingStop: false,
-                },
+            const trade = await db.create('Trade', {
+                id: `trade_${Date.now()}`,
+                sessionId,
+                instrumentId: instrument.id,
+                strategyId: strategyId || null,
+                action: signal.action,
+                quantity: signal.quantity,
+                price: signal.price,
+                orderType: 'MARKET', // Default to market order
+                status: 'PENDING',
+                stopLoss: signal.stopLoss || null,
+                target: signal.target || null,
+                trailingStop: false,
+                orderTime: new Date(),
+                executionTime: null,
+                realizedPnL: null,
+                unrealizedPnL: null
             });
 
             logger.info('Trade created:', trade.id);
@@ -40,15 +41,14 @@ export class OrderService {
 
     async updateTradeStatus(tradeId: string, status: string, orderId?: string, executionPrice?: number) {
         try {
-            const trade = await db.trade.update({
-                where: { id: tradeId },
-                data: {
-                    status,
-                    orderId: orderId || null,
-                    executionTime: status === 'COMPLETE' ? new Date() : null,
-                    realizedPnL: executionPrice ? await this.calculateRealizedPnL(tradeId, executionPrice) : null,
-                },
-            });
+            const updateData: any = {
+                status,
+                orderId: orderId || null,
+                executionTime: status === 'COMPLETE' ? new Date() : null,
+                realizedPnL: executionPrice ? await this.calculateRealizedPnL(tradeId, executionPrice) : null,
+            };
+
+            const trade = await db.update('Trade', { id: tradeId }, updateData);
 
             logger.info('Trade status updated:', trade.id, status);
             return trade;
@@ -60,16 +60,7 @@ export class OrderService {
 
     async getTrade(tradeId: string) {
         try {
-            const trade = await db.trade.findUnique({
-                where: { id: tradeId },
-                include: {
-                    instrument: true,
-                    strategy: true,
-                    session: true,
-                    positions: true,
-                },
-            });
-
+            const trade = await db.findUnique('Trade', { id: tradeId });
             return trade;
         } catch (error) {
             logger.error('Failed to get trade:', error);
@@ -79,16 +70,10 @@ export class OrderService {
 
     async getTradesBySession(sessionId: string) {
         try {
-            const trades = await db.trade.findMany({
+            const trades = await db.findMany('Trade', {
                 where: { sessionId },
-                include: {
-                    instrument: true,
-                    strategy: true,
-                    positions: true,
-                },
-                orderBy: { orderTime: 'desc' },
+                orderBy: { orderTime: 'desc' }
             });
-
             return trades;
         } catch (error) {
             logger.error('Failed to get trades by session:', error);
@@ -98,16 +83,10 @@ export class OrderService {
 
     async getTradesByStrategy(strategyId: string) {
         try {
-            const trades = await db.trade.findMany({
+            const trades = await db.findMany('Trade', {
                 where: { strategyId },
-                include: {
-                    instrument: true,
-                    session: true,
-                    positions: true,
-                },
-                orderBy: { orderTime: 'desc' },
+                orderBy: { orderTime: 'desc' }
             });
-
             return trades;
         } catch (error) {
             logger.error('Failed to get trades by strategy:', error);
@@ -117,18 +96,13 @@ export class OrderService {
 
     async getPendingTrades(sessionId: string) {
         try {
-            const trades = await db.trade.findMany({
+            const trades = await db.findMany('Trade', {
                 where: {
                     sessionId,
                     status: 'PENDING',
                 },
-                include: {
-                    instrument: true,
-                    strategy: true,
-                },
-                orderBy: { orderTime: 'asc' },
+                orderBy: { orderTime: 'asc' }
             });
-
             return trades;
         } catch (error) {
             logger.error('Failed to get pending trades:', error);
@@ -146,27 +120,28 @@ export class OrderService {
     }) {
         try {
             // Get instrument
-            const instrument = await db.instrument.findUnique({
-                where: { symbol: positionData.symbol },
-            });
+            const instrument = await db.findUnique('Instrument', { symbol: positionData.symbol });
 
             if (!instrument) {
                 throw new Error(`Instrument not found: ${positionData.symbol}`);
             }
 
-            const position = await db.position.create({
-                data: {
-                    sessionId,
-                    instrumentId: instrument.id,
-                    tradeId,
-                    quantity: positionData.quantity,
-                    averagePrice: positionData.averagePrice,
-                    currentPrice: positionData.averagePrice, // Initialize with average price
-                    side: positionData.side,
-                    stopLoss: positionData.stopLoss || null,
-                    target: positionData.target || null,
-                    trailingStop: false,
-                },
+            const position = await db.create('Position', {
+                id: `position_${Date.now()}`,
+                sessionId,
+                instrumentId: instrument.id,
+                tradeId,
+                quantity: positionData.quantity,
+                averagePrice: positionData.averagePrice,
+                currentPrice: positionData.averagePrice, // Initialize with average price
+                side: positionData.side,
+                stopLoss: positionData.stopLoss || null,
+                target: positionData.target || null,
+                trailingStop: false,
+                openTime: new Date(),
+                closeTime: null,
+                unrealizedPnL: null,
+                realizedPnL: null
             });
 
             logger.info('Position created:', position.id);
@@ -195,10 +170,7 @@ export class OrderService {
             if (updates.unrealizedPnL !== undefined) updateData.unrealizedPnL = updates.unrealizedPnL;
             if (updates.realizedPnL !== undefined) updateData.realizedPnL = updates.realizedPnL;
 
-            const position = await db.position.update({
-                where: { id: positionId },
-                data: updateData,
-            });
+            const position = await db.update('Position', { id: positionId }, updateData);
 
             logger.info('Position updated:', position.id);
             return position;
@@ -210,14 +182,11 @@ export class OrderService {
 
     async closePosition(positionId: string, closePrice: number) {
         try {
-            const position = await db.position.update({
-                where: { id: positionId },
-                data: {
-                    currentPrice: closePrice,
-                    closeTime: new Date(),
-                    realizedPnL: await this.calculatePositionPnL(positionId, closePrice),
-                    unrealizedPnL: 0,
-                },
+            const position = await db.update('Position', { id: positionId }, {
+                currentPrice: closePrice,
+                closeTime: new Date(),
+                realizedPnL: await this.calculatePositionPnL(positionId, closePrice),
+                unrealizedPnL: 0,
             });
 
             logger.info('Position closed:', position.id);
@@ -230,15 +199,10 @@ export class OrderService {
 
     async getPositions(sessionId: string) {
         try {
-            const positions = await db.position.findMany({
+            const positions = await db.findMany('Position', {
                 where: { sessionId },
-                include: {
-                    instrument: true,
-                    trade: true,
-                },
-                orderBy: { openTime: 'desc' },
+                orderBy: { openTime: 'desc' }
             });
-
             return positions;
         } catch (error) {
             logger.error('Failed to get positions:', error);
@@ -248,18 +212,13 @@ export class OrderService {
 
     async getOpenPositions(sessionId: string) {
         try {
-            const positions = await db.position.findMany({
+            const positions = await db.findMany('Position', {
                 where: {
                     sessionId,
                     closeTime: null,
                 },
-                include: {
-                    instrument: true,
-                    trade: true,
-                },
-                orderBy: { openTime: 'desc' },
+                orderBy: { openTime: 'desc' }
             });
-
             return positions;
         } catch (error) {
             logger.error('Failed to get open positions:', error);
@@ -269,22 +228,22 @@ export class OrderService {
 
     private async calculateRealizedPnL(tradeId: string, executionPrice: number): Promise<number> {
         try {
-            const trade = await db.trade.findUnique({
-                where: { id: tradeId },
-                include: {
-                    positions: true,
-                }
-            });
+            const trade = await db.findUnique('Trade', { id: tradeId });
 
             if (!trade) {
                 logger.error('Trade not found for P&L calculation:', tradeId);
                 return 0;
             }
 
+            // Get related positions
+            const positions = await db.findMany('Position', {
+                where: { tradeId }
+            });
+
             // For a closing trade, calculate P&L based on position
-            if (trade.positions.length > 0) {
-                const position = trade.positions[0]; // Get the related position
-                const pnl = await this.calculatePositionPnL(position, executionPrice);
+            if (positions.length > 0) {
+                const position = positions[0]; // Get the related position
+                const pnl = await this.calculatePositionPnL(position.id, executionPrice);
                 return pnl;
             }
 
@@ -296,44 +255,39 @@ export class OrderService {
         }
     }
 
-    private async calculatePositionPnL(position: any, closePrice: number): Promise<number> {
-        if (!position || !position.averagePrice || !position.quantity) {
+    private async calculatePositionPnL(positionId: string, closePrice: number): Promise<number> {
+        try {
+            const position = await db.findUnique('Position', { id: positionId });
+
+            if (!position || !position.averagePrice || !position.quantity) {
+                return 0;
+            }
+
+            const priceDiff = position.side === 'LONG'
+                ? closePrice - position.averagePrice
+                : position.averagePrice - closePrice;
+
+            return priceDiff * position.quantity;
+        } catch (error) {
+            logger.error('Error calculating position P&L:', error);
             return 0;
         }
-
-        const entryPrice = position.averagePrice;
-        const quantity = position.quantity;
-        const side = position.side;
-
-        // Calculate P&L based on position side (LONG/SHORT)
-        if (side === 'LONG') {
-            return (closePrice - entryPrice) * quantity;
-        } else if (side === 'SHORT') {
-            return (entryPrice - closePrice) * quantity;
-        }
-
-        return 0;
     }
 
     async updatePositionPnL(positionId: string, currentPrice: number) {
         try {
-            const position = await db.position.findUnique({
-                where: { id: positionId },
-            });
+            const position = await db.findUnique('Position', { id: positionId });
 
             if (!position) {
                 logger.error('Position not found for P&L update:', positionId);
                 return;
             }
 
-            const unrealizedPnL = await this.calculatePositionPnL(position, currentPrice);
+            const unrealizedPnL = await this.calculatePositionPnL(position.id, currentPrice);
 
-            await db.position.update({
-                where: { id: positionId },
-                data: {
-                    currentPrice,
-                    unrealizedPnL,
-                },
+            await db.update('Position', { id: positionId }, {
+                currentPrice,
+                unrealizedPnL,
             });
 
             logger.debug('Position P&L updated:', positionId, unrealizedPnL);
@@ -345,7 +299,7 @@ export class OrderService {
 
     async getPositionMetrics(sessionId: string) {
         try {
-            const positions = await db.position.findMany({
+            const positions = await db.findMany('Position', {
                 where: {
                     sessionId,
                     closeTime: null, // Only open positions
@@ -382,7 +336,7 @@ export class OrderService {
 
     async getSessionPnL(sessionId: string) {
         try {
-            const positions = await db.position.findMany({
+            const positions = await db.findMany('Position', {
                 where: { sessionId },
                 select: {
                     realizedPnL: true,
@@ -406,7 +360,7 @@ export class OrderService {
 
     async getRecentTrades(limit: number = 10) {
         try {
-            const trades = await db.trade.findMany({
+            const trades = await db.findMany('Trade', {
                 take: limit,
                 orderBy: {
                     orderTime: 'desc'

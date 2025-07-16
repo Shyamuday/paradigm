@@ -50,6 +50,7 @@ model TradingSession {
   trades      Trade[]
   positions   Position[]
   riskMetrics RiskMetrics[]
+  optionsPositions OptionsPosition[] // Added relation
   
   @@map("trading_sessions")
 }
@@ -85,9 +86,10 @@ model Instrument {
   backtestTrades BacktestTrade[]
   
   // Options-specific relations
-  optionsChain OptionsChain[]
+  optionsChains OptionsChain[] @relation("InstrumentToOptionsChain") // Updated relation
   optionsGreeks OptionsGreeks[]
   optionsPositions OptionsPosition[]
+  optionsContracts OptionsContract[] // Added relation
   
   @@map("instruments")
 }
@@ -110,10 +112,11 @@ model OptionsChain {
   
   // Related data
   optionsContracts OptionsContract[]
+  instrument Instrument @relation("InstrumentToOptionsChain", fields: [underlyingSymbol], references: [symbol]) // Updated relation
   
   @@unique([underlyingSymbol, expiryDate])
-  @@index([underlyingSymbol, expiryDate])
-  @@index([expiryDate])
+  @@index([underlyingSymbol, expiryDate], name: "options_chain_underlying_expiry_idx")
+  @@index([expiryDate], name: "options_chain_expiry_idx")
   @@map("options_chains")
 }
 
@@ -165,10 +168,10 @@ model OptionsContract {
   lastUpdated     DateTime @default(now())
   
   @@unique([chainId, strikePrice, optionType])
-  @@index([chainId, strikePrice])
-  @@index([strikePrice, optionType])
-  @@index([expiryDate])
-  @@index([impliedVolatility])
+  @@index([chainId, strikePrice], name: "options_contract_chain_strike_idx")
+  @@index([strikePrice, optionType], name: "options_contract_strike_type_idx")
+  @@index([expiryDate], name: "options_contract_expiry_idx")
+  @@index([impliedVolatility], name: "options_contract_iv_idx")
   @@map("options_contracts")
 }
 
@@ -197,8 +200,8 @@ model OptionsGreeks {
   inTheMoney      Boolean
   
   @@unique([instrumentId, timestamp])
-  @@index([instrumentId, timestamp])
-  @@index([timestamp])
+  @@index([instrumentId, timestamp], name: "options_greeks_instrument_time_idx")
+  @@index([timestamp], name: "options_greeks_time_idx")
   @@map("options_greeks")
 }
 
@@ -243,48 +246,45 @@ model OptionsPosition {
   unrealizedPnL   Float?
   realizedPnL     Float?
   
+  // Related data
+  strategyLegs OptionsStrategyLeg[] // Added relation
+  
   // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
-  @@index([sessionId, instrumentId])
-  @@index([underlyingSymbol, expiryDate])
-  @@index([strategyType])
+  @@index([sessionId, instrumentId], name: "options_position_session_instrument_idx")
   @@map("options_positions")
 }
 
-// Options strategy legs (for multi-leg strategies)
+// Options strategy legs
 model OptionsStrategyLeg {
-  id              String   @id @default(cuid())
-  strategyId      String
-  strategy        Strategy @relation(fields: [strategyId], references: [id])
-  positionId      String?
-  position        OptionsPosition? @relation(fields: [positionId], references: [id])
+  id             String   @id @default(cuid())
+  strategyId     String
+  strategy       Strategy @relation(fields: [strategyId], references: [id])
+  positionId     String?
+  position       OptionsPosition? @relation(fields: [positionId], references: [id])
   
   // Leg details
-  legType         String   // BUY_CALL, SELL_CALL, BUY_PUT, SELL_PUT
-  strikePrice     Float
-  optionType      String   // CE, PE
-  expiryDate      DateTime
-  quantity        Int
-  price           Float?
+  legType        String   // BUY_CALL, SELL_PUT, etc.
+  strikePrice    Float
+  optionType     String   // CE, PE
+  quantity       Int
   
   // Greeks contribution
-  delta           Float?
-  gamma           Float?
-  theta           Float?
-  vega            Float?
+  deltaContribution Float?
+  gammaContribution Float?
+  thetaContribution Float?
+  vegaContribution  Float?
   
-  // Order details
-  orderId         String?
-  status          String   // PENDING, FILLED, CANCELLED
+  // P&L contribution
+  pnlContribution   Float?
   
-  @@index([strategyId])
-  @@index([positionId])
+  @@index([strategyId], name: "options_strategy_leg_strategy_idx")
   @@map("options_strategy_legs")
 }
 
-// Market data (historical and live)
+// Market data
 model MarketData {
   id           String   @id @default(cuid())
   instrumentId String
@@ -295,97 +295,90 @@ model MarketData {
   low          Float?
   close        Float?
   volume       Int?
-  ltp          Float?  // Last traded price
-  change       Float?  // Price change
-  changePercent Float? // Price change percentage
-  isArchived   Boolean  @default(false) // For data archival
-  compressedAt DateTime? // When data was compressed
   
   @@unique([instrumentId, timestamp])
-  @@index([instrumentId, timestamp])
-  @@index([isArchived, timestamp]) // For archival queries
+  @@index([instrumentId, timestamp], name: "market_data_instrument_time_idx")
+  @@index([timestamp], name: "market_data_time_idx")
   @@map("market_data")
 }
 
-// Multi-timeframe market data storage
+// Timeframe configuration
 model TimeframeConfig {
-  id          String   @id @default(cuid())
-  name        String   @unique // 1min, 3min, 5min, 15min, 30min, 1hour, 1day
-  description String?
-  intervalMinutes Int   // Duration in minutes
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?
+  intervalMinutes Int
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   
   // Related data
-  candleData  CandleData[]
+  candleData      CandleData[]
+  volumeProfiles  VolumeProfile[] // Added relation
   
-  @@map("timeframe_configs")
+  @@map("timeframe_config")
 }
 
+// Candle data
 model CandleData {
-  id             String   @id @default(cuid())
-  instrumentId   String
-  instrument     Instrument @relation(fields: [instrumentId], references: [id])
-  timeframeId    String
-  timeframe      TimeframeConfig @relation(fields: [timeframeId], references: [id])
-  timestamp      DateTime
-  open           Float
-  high           Float
-  low            Float
-  close          Float
-  volume         Int
-  typicalPrice   Float?   // (High + Low + Close) / 3
-  weightedPrice  Float?   // (High + Low + Close + Close) / 4
-  priceChange    Float?   // Close - Open
-  priceChangePercent Float? // ((Close - Open) / Open) * 100
-  upperShadow    Float?   // High - Max(Open, Close)
-  lowerShadow    Float?   // Min(Open, Close) - Low
-  bodySize       Float?   // Abs(Close - Open)
-  totalRange     Float?   // High - Low
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timeframeId     String
+  timeframe       TimeframeConfig @relation(fields: [timeframeId], references: [id])
+  timestamp       DateTime
+  open            Float
+  high            Float
+  low             Float
+  close           Float
+  volume          Int
+  typicalPrice    Float?
+  weightedPrice   Float?
+  priceChange     Float?
+  priceChangePercent Float?
+  upperShadow     Float?
+  lowerShadow     Float?
+  bodySize        Float?
+  totalRange      Float?
   
   @@unique([instrumentId, timeframeId, timestamp])
-  @@index([instrumentId, timeframeId, timestamp])
-  @@index([instrumentId, timeframeId, timestamp(sort: Desc)]) // For latest data queries
-  @@index([timeframeId, timestamp]) // For timeframe-based queries
-  @@index([timestamp]) // For time-based queries
+  @@index([instrumentId, timeframeId, timestamp], name: "candle_data_instrument_timeframe_time_idx")
+  @@index([instrumentId, timeframeId, timestamp(sort: Desc)], name: "candle_data_latest_idx") // For latest data queries
   @@map("candle_data")
 }
 
-// Real-time tick data for immediate processing
+// Tick data
 model TickData {
-  id           String   @id @default(cuid())
-  instrumentId String
-  instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  timestamp    DateTime
-  ltp          Float    // Last traded price
-  volume       Int
-  change       Float?   // Price change from previous tick
-  changePercent Float?  // Percentage change
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timestamp       DateTime
+  ltp             Float
+  volume          Int
+  change          Float?
+  changePercent   Float?
   
-  @@index([instrumentId, timestamp])
-  @@index([timestamp]) // For time-based queries
-  @@index([instrumentId, timestamp(sort: Desc)]) // For latest data queries
+  @@unique([instrumentId, timestamp])
+  @@index([instrumentId, timestamp], name: "tick_data_instrument_time_idx")
+  @@index([timestamp], name: "tick_data_time_idx") // For time-based queries
+  @@index([instrumentId, timestamp(sort: Desc)], name: "tick_data_latest_idx") // For latest data queries
   @@map("tick_data")
-  @@schema("public")
-  // Partition by month for better performance
-  // Note: Actual partitioning needs to be set up in PostgreSQL
 }
 
-// Aggregated volume profile data
+// Volume profile data
 model VolumeProfile {
-  id           String   @id @default(cuid())
-  instrumentId String
-  instrument   Instrument @relation(fields: [instrumentId], references: [id])
-  timeframeId  String
-  timeframe    TimeframeConfig @relation(fields: [timeframeId], references: [id])
-  date         DateTime @db.Date
-  priceLevel   Float    // Price level for volume analysis
-  volume       Int      // Volume at this price level
-  poc          Boolean  @default(false) // Point of Control (highest volume)
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timeframeId     String
+  timeframe       TimeframeConfig @relation(fields: [timeframeId], references: [id])
+  date            DateTime @db.Date
+  priceLevel      Float
+  volume          Int
+  poc             Boolean  // Point of Control
   
   @@unique([instrumentId, timeframeId, date, priceLevel])
-  @@index([instrumentId, timeframeId, date])
+  @@index([instrumentId, timeframeId, date], name: "volume_profile_instrument_timeframe_date_idx")
   @@map("volume_profiles")
 }
 

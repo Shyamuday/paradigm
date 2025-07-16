@@ -4,20 +4,13 @@ import * as path from 'path';
 import express from 'express';
 import open from 'open';
 
-// API Credentials
-const API_CREDENTIALS = {
-    API_KEY: "4kii2cglymgxjpqq",
-    API_SECRET: "fmapqarltxl0lhyetqeasfgjias6ov3h",
-    CLIENT_ID: "XB7556",
-    // Use environment variable for redirect URL with fallback to localhost
-    REDIRECT_URL: process.env.KITE_REDIRECT_URL || "http://localhost:3000/callback"
-};
-
+// Session data interface
 interface SavedSession {
     access_token: string;
     refresh_token?: string;
     user_id: string;
-    user_name: string;
+    user_name?: string;
+    email?: string;
     expires_at: string;
     login_time: string;
 }
@@ -25,11 +18,23 @@ interface SavedSession {
 export class ZerodhaAuth {
     private kite: InstanceType<typeof KiteConnect>;
     private sessionFile: string;
+    private apiKey: string;
+    private apiSecret: string;
+    private redirectUrl: string;
 
-    constructor() {
+    constructor(apiKey?: string, apiSecret?: string, redirectUrl?: string) {
+        // Use provided credentials or environment variables
+        this.apiKey = apiKey || process.env.ZERODHA_API_KEY || '';
+        this.apiSecret = apiSecret || process.env.ZERODHA_API_SECRET || '';
+        this.redirectUrl = redirectUrl || process.env.KITE_REDIRECT_URL || "http://localhost:3000/callback";
+
+        if (!this.apiKey || !this.apiSecret) {
+            throw new Error('API Key and Secret are required. Provide them as parameters or set ZERODHA_API_KEY and ZERODHA_API_SECRET environment variables.');
+        }
+
         // Initialize KiteConnect
         this.kite = new KiteConnect({
-            api_key: API_CREDENTIALS.API_KEY
+            api_key: this.apiKey
         });
 
         // Setup session storage
@@ -67,22 +72,21 @@ export class ZerodhaAuth {
                     console.log('Generating session...');
 
                     // Generate session
-                    const session = await this.kite.generateSession(requestToken, API_CREDENTIALS.API_SECRET);
+                    const session = await this.kite.generateSession(requestToken, this.apiSecret);
 
                     // Set the access token
                     this.kite.setAccessToken(session.access_token);
 
                     // Save session info
-                    const sessionData: SavedSession = {
+                    await this.saveSession({
                         access_token: session.access_token,
                         refresh_token: session.refresh_token,
                         user_id: session.user_id,
                         user_name: session.user_name,
+                        email: session.email,
                         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                         login_time: new Date().toISOString()
-                    };
-
-                    fs.writeFileSync(this.sessionFile, JSON.stringify(sessionData, null, 2));
+                    });
 
                     console.log('\n✅ Login successful!');
                     console.log(`User: ${session.user_name}`);
@@ -131,33 +135,44 @@ export class ZerodhaAuth {
     }
 
     /**
-     * Login with manual token (enctoken from Kite Web)
+     * Login with access token (from OAuth or manual)
      */
-    async loginWithToken(enctoken: string): Promise<void> {
+    async loginWithToken(accessToken: string): Promise<void> {
         try {
-            // Initialize with token
-            this.kite.setAccessToken(enctoken);
+            // Set the access token
+            this.kite.setAccessToken(accessToken);
 
-            // Test the connection
+            // Verify token by getting profile
             const profile = await this.kite.getProfile();
 
             // Save session
-            const sessionData: SavedSession = {
-                access_token: enctoken,
+            await this.saveSession({
+                access_token: accessToken,
                 user_id: profile.user_id,
                 user_name: profile.user_name,
+                email: profile.email,
                 expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                 login_time: new Date().toISOString()
-            };
+            });
 
-            fs.writeFileSync(this.sessionFile, JSON.stringify(sessionData, null, 2));
-
-            console.log('\n✅ Manual token login successful!');
+            console.log('\n✅ Token login successful!');
             console.log(`User: ${profile.user_name}`);
             console.log(`User ID: ${profile.user_id}`);
 
         } catch (error) {
-            console.error('\n❌ Manual token login failed:', error);
+            console.error('\n❌ Token login failed:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Save session data to file
+     */
+    private async saveSession(sessionData: SavedSession): Promise<void> {
+        try {
+            fs.writeFileSync(this.sessionFile, JSON.stringify(sessionData, null, 2));
+        } catch (error) {
+            console.error('Failed to save session:', error);
             throw error;
         }
     }
@@ -165,26 +180,32 @@ export class ZerodhaAuth {
     /**
      * Check if we have a valid session
      */
-    checkSession(): boolean {
+    async hasValidSession(): Promise<boolean> {
         try {
-            if (fs.existsSync(this.sessionFile)) {
-                const session = JSON.parse(fs.readFileSync(this.sessionFile, 'utf8')) as SavedSession;
-                const expiresAt = new Date(session.expires_at);
-
-                if (expiresAt > new Date()) {
-                    console.log('\n✅ Found valid session:');
-                    console.log(`User: ${session.user_name}`);
-                    console.log(`Expires: ${expiresAt.toLocaleString()}`);
-
-                    // Set the access token
-                    this.kite.setAccessToken(session.access_token);
-                    return true;
-                }
+            if (!fs.existsSync(this.sessionFile)) {
+                return false;
             }
+
+            const sessionData: SavedSession = JSON.parse(fs.readFileSync(this.sessionFile, 'utf8'));
+
+            // Check if session is expired
+            if (new Date() > new Date(sessionData.expires_at)) {
+                console.log('Session expired');
+                return false;
+            }
+
+            // Set the access token and test it
+            this.kite.setAccessToken(sessionData.access_token);
+            const profile = await this.kite.getProfile();
+
+            console.log('\n✅ Valid session found');
+            console.log(`User: ${profile.user_name}`);
+
+            return true;
         } catch (error) {
-            console.error('Error reading session:', error);
+            console.log('No valid session found:', error instanceof Error ? error.message : 'Unknown error');
+            return false;
         }
-        return false;
     }
 
     /**
@@ -208,5 +229,12 @@ export class ZerodhaAuth {
             console.error('\n❌ Logout failed:', error);
             throw error;
         }
+    }
+
+    /**
+     * Get login URL for manual authentication
+     */
+    getLoginURL(): string {
+        return this.kite.getLoginURL();
     }
 } 

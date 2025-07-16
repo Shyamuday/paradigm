@@ -21,13 +21,14 @@ interface MarketDataPoint {
 export class StrategyService {
     async createStrategy(config: StrategyConfig) {
         try {
-            const strategy = await db.strategy.create({
-                data: {
-                    name: config.name,
-                    description: config.description || null,
-                    isActive: config.enabled,
-                    config: config as any,
-                },
+            const strategy = await db.create('Strategy', {
+                id: `strategy_${Date.now()}`,
+                name: config.name,
+                description: config.description || null,
+                isActive: config.enabled,
+                config: config as any,
+                createdAt: new Date(),
+                updatedAt: new Date()
             });
 
             logger.info('Strategy created:', strategy.name);
@@ -40,18 +41,7 @@ export class StrategyService {
 
     async getStrategy(strategyId: string) {
         try {
-            const strategy = await db.strategy.findUnique({
-                where: { id: strategyId },
-                include: {
-                    trades: {
-                        include: {
-                            instrument: true,
-                            session: true,
-                        },
-                    },
-                },
-            });
-
+            const strategy = await db.findUnique('Strategy', { id: strategyId });
             return strategy;
         } catch (error) {
             logger.error('Failed to get strategy:', error);
@@ -61,18 +51,7 @@ export class StrategyService {
 
     async getStrategyByName(name: string) {
         try {
-            const strategy = await db.strategy.findUnique({
-                where: { name },
-                include: {
-                    trades: {
-                        include: {
-                            instrument: true,
-                            session: true,
-                        },
-                    },
-                },
-            });
-
+            const strategy = await db.findUnique('Strategy', { name });
             return strategy;
         } catch (error) {
             logger.error('Failed to get strategy by name:', error);
@@ -82,10 +61,9 @@ export class StrategyService {
 
     async getAllStrategies() {
         try {
-            const strategies = await db.strategy.findMany({
-                orderBy: { name: 'asc' },
+            const strategies = await db.findMany('Strategy', {
+                orderBy: { name: 'asc' }
             });
-
             return strategies;
         } catch (error) {
             logger.error('Failed to get all strategies:', error);
@@ -95,11 +73,10 @@ export class StrategyService {
 
     async getActiveStrategies() {
         try {
-            const strategies = await db.strategy.findMany({
+            const strategies = await db.findMany('Strategy', {
                 where: { isActive: true },
-                orderBy: { name: 'asc' },
+                orderBy: { name: 'asc' }
             });
-
             return strategies;
         } catch (error) {
             logger.error('Failed to get active strategies:', error);
@@ -115,11 +92,9 @@ export class StrategyService {
             if (updates.description !== undefined) updateData.description = updates.description;
             if (updates.enabled !== undefined) updateData.isActive = updates.enabled;
             if (updates !== undefined) updateData.config = updates;
+            updateData.updatedAt = new Date();
 
-            const strategy = await db.strategy.update({
-                where: { id: strategyId },
-                data: updateData,
-            });
+            const strategy = await db.update('Strategy', { id: strategyId }, updateData);
 
             logger.info('Strategy updated:', strategy.name);
             return strategy;
@@ -131,10 +106,10 @@ export class StrategyService {
 
     async toggleStrategy(strategyId: string, enabled: boolean) {
         try {
-            const strategy = await db.strategy.update({
-                where: { id: strategyId },
-                data: { isActive: enabled },
-            });
+            const strategy = await db.update('Strategy',
+                { id: strategyId },
+                { isActive: enabled, updatedAt: new Date() }
+            );
 
             logger.info('Strategy toggled:', strategy.name, enabled ? 'enabled' : 'disabled');
             return strategy;
@@ -146,10 +121,7 @@ export class StrategyService {
 
     async deleteStrategy(strategyId: string) {
         try {
-            const strategy = await db.strategy.delete({
-                where: { id: strategyId },
-            });
-
+            const strategy = await db.delete('Strategy', { id: strategyId });
             logger.info('Strategy deleted:', strategy.name);
             return strategy;
         } catch (error) {
@@ -192,7 +164,7 @@ export class StrategyService {
     private async generateSignals(strategy: any, marketData: MarketDataPoint[]): Promise<TradeSignal[]> {
         const signals: TradeSignal[] = [];
 
-        if (strategy.name === 'simple_ma') {
+        try {
             const config = strategy.config as StrategyConfig;
             const maConfig: MovingAverageConfig = {
                 shortPeriod: config.parameters?.shortPeriod || 10,
@@ -257,133 +229,57 @@ export class StrategyService {
                     }
                 }
             }
+        } catch (error) {
+            logger.error('Error generating signals:', error);
         }
 
         return signals;
     }
 
-    private calculateSMA(data: MarketDataPoint[], period: number): (number | null)[] {
-        const sma: (number | null)[] = new Array(data.length).fill(null);
-        let sum = 0;
-        let validPoints = 0;
+    private calculateSMA(data: MarketDataPoint[], period: number): number[] {
+        const sma: number[] = [];
 
-        // Calculate first SMA
         for (let i = 0; i < data.length; i++) {
-            const price = data[i].close || data[i].ltp;
-            if (typeof price !== 'number') continue;
-
-            sum += price;
-            validPoints++;
-
-            if (i >= period - 1 && validPoints >= period) {
-                sma[i] = sum / period;
-                const oldDataPoint = data[i - (period - 1)];
-                if (oldDataPoint) {
-                    const oldPrice = oldDataPoint.close || oldDataPoint.ltp;
-                    if (typeof oldPrice === 'number') {
-                        sum -= oldPrice;
-                        validPoints--;
-                    }
-                }
+            if (i < period - 1) {
+                sma.push(0); // Not enough data points
+                continue;
             }
+
+            let sum = 0;
+            for (let j = i - period + 1; j <= i; j++) {
+                const price = data[j].close || data[j].ltp || 0;
+                sum += price;
+            }
+            sma.push(sum / period);
         }
 
         return sma;
     }
 
     private createSignal(
-        data: MarketDataPoint,
+        marketData: MarketDataPoint,
         action: 'BUY' | 'SELL',
-        metadata: {
-            shortMA: number;
-            longMA: number;
-            shortPeriod: number;
-            longPeriod: number;
-        }
+        metadata: any
     ): TradeSignal | null {
-        const price = data.close || data.ltp;
-        if (!price || !data.symbol) return null;
-
-        const atr = this.calculateATR(data);
-        if (!atr) return null;
-
-        // Calculate stop loss and target based on ATR
-        const stopLossMultiplier = 2;
-        const targetMultiplier = 3;
-        const stopLoss = action === 'BUY'
-            ? price - (atr * stopLossMultiplier)
-            : price + (atr * stopLossMultiplier);
-
-        const target = action === 'BUY'
-            ? price + (atr * targetMultiplier)
-            : price - (atr * targetMultiplier);
-
-        return {
-            id: `signal_${Date.now()}_${Math.random()}`,
-            strategy: 'simple_ma',
-            symbol: data.symbol,
-            action,
-            quantity: 1, // This should be calculated based on position sizing rules
-            price,
-            stopLoss,
-            target,
-            timestamp: new Date(data.timestamp),
-            metadata: {
-                ...metadata,
-                atr,
-                currentPrice: price
-            }
-        };
-    }
-
-    private calculateATR(data: MarketDataPoint, period: number = 14): number | null {
-        const high = data.high;
-        const low = data.low;
-        const close = data.close || data.ltp;
-
-        if (typeof high !== 'number' || typeof low !== 'number' || typeof close !== 'number') {
-            return null;
-        }
-
-        // Simplified ATR calculation
-        const tr = Math.max(
-            high - low,
-            Math.abs(high - close),
-            Math.abs(low - close)
-        );
-
-        return tr;
-    }
-
-    async getStrategyPerformance(strategyId: string) {
         try {
-            const trades = await db.trade.findMany({
-                where: { strategyId },
-                include: {
-                    positions: true,
-                },
-            });
-
-            const totalTrades = trades.length;
-            const completedTrades = trades.filter(t => t.status === 'COMPLETE');
-            const winningTrades = completedTrades.filter(t => (t.realizedPnL || 0) > 0);
-            const losingTrades = completedTrades.filter(t => (t.realizedPnL || 0) < 0);
-
-            const totalPnL = completedTrades.reduce((sum, t) => sum + (t.realizedPnL || 0), 0);
-            const winRate = completedTrades.length > 0 ? (winningTrades.length / completedTrades.length) * 100 : 0;
+            const price = marketData.close || marketData.ltp;
+            if (!price || !marketData.symbol) {
+                return null;
+            }
 
             return {
-                totalTrades,
-                completedTrades: completedTrades.length,
-                winningTrades: winningTrades.length,
-                losingTrades: losingTrades.length,
-                winRate,
-                totalPnL,
-                averagePnL: completedTrades.length > 0 ? totalPnL / completedTrades.length : 0,
+                id: `signal_${Date.now()}_${Math.random()}`,
+                strategy: 'MovingAverage',
+                symbol: marketData.symbol,
+                action,
+                quantity: 1, // Default quantity
+                price,
+                timestamp: new Date(marketData.timestamp),
+                metadata
             };
         } catch (error) {
-            logger.error('Failed to get strategy performance:', error);
-            throw error;
+            logger.error('Error creating signal:', error);
+            return null;
         }
     }
 } 

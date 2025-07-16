@@ -1,16 +1,16 @@
-import { EnhancedMarketDataService } from './enhanced-market-data.service';
+import { MarketDataService } from './market-data.service';
 import { logger } from '../logger/logger';
 import { TickData } from '../types';
 
 export class LiveDataIntegrationService {
-    private marketDataService: EnhancedMarketDataService;
+    private marketDataService: MarketDataService;
     private isConnected: boolean = false;
     private reconnectAttempts: number = 0;
     private maxReconnectAttempts: number = 5;
     private reconnectDelay: number = 5000; // 5 seconds
 
     constructor() {
-        this.marketDataService = new EnhancedMarketDataService();
+        this.marketDataService = new MarketDataService(instrumentsManager, kite);
     }
 
     /**

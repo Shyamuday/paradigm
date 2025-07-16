@@ -1,5 +1,13 @@
 // Common types and interfaces for the trading bot
 
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface TickData {
   instrumentToken: number;
   symbol: string;

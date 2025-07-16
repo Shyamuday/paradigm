@@ -4,7 +4,7 @@ import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { InstrumentsManager } from './instruments-manager.service';
 import { OrderManager } from './order-manager.service';
 import { WebSocketManager } from './websocket-manager.service';
-import { EnhancedStrategyService } from './enhanced-strategy.service';
+import { StrategyService } from './strategy.service';
 import { RiskService } from './risk.service';
 import { PortfolioService } from './portfolio.service';
 import { db } from '../database/database';
@@ -53,7 +53,7 @@ export class AutomatedTradingService extends EventEmitter {
     private instrumentsManager: InstrumentsManager;
     private orderManager: OrderManager;
     private websocketManager: WebSocketManager;
-    private strategyService: EnhancedStrategyService;
+    private strategyService: StrategyService;
     private riskService: RiskService;
     private portfolioService: PortfolioService;
 
@@ -71,7 +71,7 @@ export class AutomatedTradingService extends EventEmitter {
         this.instrumentsManager = new InstrumentsManager(this.auth);
         this.orderManager = new OrderManager(this.auth, this.instrumentsManager);
         this.websocketManager = new WebSocketManager(this.auth);
-        this.strategyService = new EnhancedStrategyService();
+        this.strategyService = new StrategyService();
         this.riskService = new RiskService();
         this.portfolioService = new PortfolioService();
 

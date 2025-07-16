@@ -1,4 +1,5 @@
-import { Position } from '@prisma/client';
+import { Position as PrismaPosition } from '@prisma/client';
+import { Position as KitePosition, Holding as KiteHolding } from 'kiteconnect';
 
 export interface PortfolioMetrics {
     totalValue: number;
@@ -31,9 +32,17 @@ export interface RebalanceAction {
     targetValue: number;
 }
 
-export interface PortfolioPosition extends Position {
+export interface PortfolioPosition extends PrismaPosition {
+    instrument: {
+        id: string;
+        symbol: string;
+        exchange: string;
+    };
     weight: number;
     value: number;
+    currentPrice: number;
+    unrealizedPnL: number;
+    realizedPnL: number;
     dayChange: number;
     dayChangePercent: number;
 }
