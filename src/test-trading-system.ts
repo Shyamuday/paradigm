@@ -1,8 +1,8 @@
 import { logger } from './logger/logger';
-import { AutoTOTPZerodhaAuth } from './auth/auto-totp-example';
-import { InstrumentsManagerService } from './services/instruments-manager.service';
-import { OrderManagerService } from './services/order-manager.service';
-import { WebSocketManagerService } from './services/websocket-manager.service';
+import { ZerodhaAuth } from './auth/zerodha-auth';
+import { InstrumentsManager } from './services/instruments-manager.service';
+import { OrderManager } from './services/order-manager.service';
+import { WebSocketManager } from './services/websocket-manager.service';
 import { AutomatedTradingService, TradingConfig } from './services/automated-trading.service';
 import { MovingAverageStrategy } from './services/strategies/moving-average-strategy';
 import { RSIStrategy } from './services/strategies/rsi-strategy';
@@ -10,6 +10,11 @@ import { BreakoutStrategy } from './services/strategies/breakout-strategy';
 
 class TradingSystemValidator {
     private testResults: { [key: string]: { passed: boolean; error?: string } } = {};
+    private auth: ZerodhaAuth;
+
+    constructor() {
+        this.auth = new ZerodhaAuth();
+    }
 
     async runAllTests(): Promise<void> {
         console.log('🧪 Starting Trading System Validation');
@@ -44,15 +49,13 @@ class TradingSystemValidator {
         console.log('\n🔐 Testing Authentication...');
 
         try {
-            const auth = new AutoTOTPZerodhaAuth();
-
             // Test initialization
             console.log('   ✓ Authentication service initialized');
 
             // Test login (with timeout)
-            const loginPromise = auth.login();
+            const loginPromise = this.auth.startOAuthLogin();
             const timeout = new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Login timeout')), 10000)
+                setTimeout(() => reject(new Error('Login timeout')), 60000)
             );
 
             await Promise.race([loginPromise, timeout]);
@@ -60,9 +63,10 @@ class TradingSystemValidator {
             console.log('   ✓ Authentication login successful');
             this.testResults.authentication = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Authentication test failed:', error.message);
-            this.testResults.authentication = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Authentication test failed:', errorMessage);
+            this.testResults.authentication = { passed: false, error: errorMessage };
         }
     }
 
@@ -70,11 +74,7 @@ class TradingSystemValidator {
         console.log('\n📊 Testing Instruments Manager...');
 
         try {
-            const instrumentsManager = new InstrumentsManagerService();
-
-            // Test initialization
-            await instrumentsManager.initialize();
-            console.log('   ✓ Instruments manager initialized');
+            const instrumentsManager = new InstrumentsManager(this.auth);
 
             // Test getting instruments
             const instruments = await instrumentsManager.getAllInstruments();
@@ -86,9 +86,10 @@ class TradingSystemValidator {
 
             this.testResults.instrumentsManager = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Instruments manager test failed:', error.message);
-            this.testResults.instrumentsManager = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Instruments manager test failed:', errorMessage);
+            this.testResults.instrumentsManager = { passed: false, error: errorMessage };
         }
     }
 
@@ -96,25 +97,23 @@ class TradingSystemValidator {
         console.log('\n📋 Testing Order Manager...');
 
         try {
-            const orderManager = new OrderManagerService();
-
-            // Test initialization
-            await orderManager.initialize();
-            console.log('   ✓ Order manager initialized');
+            const instrumentsManager = new InstrumentsManager(this.auth);
+            const orderManager = new OrderManager(this.auth, instrumentsManager);
 
             // Test getting holdings (should not throw error)
             const holdings = await orderManager.getHoldings();
             console.log(`   ✓ Retrieved ${holdings.length} holdings`);
 
             // Test getting positions
-            const positions = await orderManager.getPositions();
-            console.log(`   ✓ Retrieved ${positions.length} positions`);
+            const positions = await orderManager.getAllPositions();
+            console.log(`   ✓ Retrieved ${positions.net.length} net positions and ${positions.day.length} day positions`);
 
             this.testResults.orderManager = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Order manager test failed:', error.message);
-            this.testResults.orderManager = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Order manager test failed:', errorMessage);
+            this.testResults.orderManager = { passed: false, error: errorMessage };
         }
     }
 
@@ -122,26 +121,31 @@ class TradingSystemValidator {
         console.log('\n🔌 Testing WebSocket Manager...');
 
         try {
-            const wsManager = new WebSocketManagerService();
+            const wsManager = new WebSocketManager(this.auth);
 
-            // Test initialization
-            await wsManager.initialize();
-            console.log('   ✓ WebSocket manager initialized');
+            // Test connection
+            await wsManager.connect();
+            console.log('   ✓ WebSocket manager connected');
 
             // Test event handlers
             wsManager.on('connected', () => {
                 console.log('   ✓ WebSocket connected');
             });
 
-            wsManager.on('error', (error) => {
-                console.log('   ⚠️ WebSocket error:', error);
+            wsManager.on('error', (wsError: Error) => {
+                console.log('   ⚠️ WebSocket error:', wsError.message);
             });
+
+            // Test disconnection
+            await wsManager.disconnect();
+            console.log('   ✓ WebSocket manager disconnected');
 
             this.testResults.webSocketManager = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ WebSocket manager test failed:', error.message);
-            this.testResults.webSocketManager = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ WebSocket manager test failed:', errorMessage);
+            this.testResults.webSocketManager = { passed: false, error: errorMessage };
         }
     }
 
@@ -247,9 +251,10 @@ class TradingSystemValidator {
 
             this.testResults.strategies = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Strategies test failed:', error.message);
-            this.testResults.strategies = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Strategies test failed:', errorMessage);
+            this.testResults.strategies = { passed: false, error: errorMessage };
         }
     }
 
@@ -324,9 +329,10 @@ class TradingSystemValidator {
 
             this.testResults.automatedTradingService = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Automated trading service test failed:', error.message);
-            this.testResults.automatedTradingService = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Automated trading service test failed:', errorMessage);
+            this.testResults.automatedTradingService = { passed: false, error: errorMessage };
         }
     }
 
@@ -365,9 +371,10 @@ class TradingSystemValidator {
 
             this.testResults.riskManagement = { passed: true };
 
-        } catch (error) {
-            console.log('   ❌ Risk management test failed:', error.message);
-            this.testResults.riskManagement = { passed: false, error: error.message };
+        } catch (error: unknown) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.log('   ❌ Risk management test failed:', errorMessage);
+            this.testResults.riskManagement = { passed: false, error: errorMessage };
         }
     }
 
@@ -430,8 +437,9 @@ async function main(): Promise<void> {
     try {
         const validator = new TradingSystemValidator();
         await validator.runAllTests();
-    } catch (error) {
-        console.error('❌ Validation failed:', error);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('❌ Validation failed:', errorMessage);
         process.exit(1);
     }
 }
