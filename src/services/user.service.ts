@@ -5,12 +5,11 @@ import { TradingSession } from '../types';
 export class UserService {
     async createUser(email: string, name?: string) {
         try {
-            const user = await db.create('User', {
-                id: `user_${Date.now()}`,
-                email,
-                name: name || null,
-                createdAt: new Date(),
-                updatedAt: new Date()
+            const user = await db.user.create({
+                data: {
+                    email,
+                    name: name || null,
+                }
             });
 
             logger.info('User created successfully:', user.id);
@@ -23,7 +22,9 @@ export class UserService {
 
     async getUserById(id: string) {
         try {
-            const user = await db.findUnique('User', { id });
+            const user = await db.user.findUnique({
+                where: { id }
+            });
             return user;
         } catch (error) {
             logger.error('Failed to get user by ID:', error);
@@ -33,7 +34,9 @@ export class UserService {
 
     async getUserByEmail(email: string) {
         try {
-            const user = await db.findUnique('User', { email });
+            const user = await db.user.findUnique({
+                where: { email }
+            });
             return user;
         } catch (error) {
             logger.error('Failed to get user by email:', error);
@@ -43,20 +46,14 @@ export class UserService {
 
     async createTradingSession(userId: string, sessionData: Partial<TradingSession>) {
         try {
-            const session = await db.create('TradingSession', {
-                id: `session_${Date.now()}`,
-                userId,
-                startTime: new Date(),
-                endTime: sessionData.endTime || null,
-                mode: sessionData.mode || 'paper',
-                capital: sessionData.capital || 100000,
-                status: 'active',
-                totalTrades: 0,
-                winningTrades: 0,
-                losingTrades: 0,
-                totalPnL: 0,
-                maxDrawdown: 0,
-                config: sessionData.config || {}
+            const session = await db.tradingSession.create({
+                data: {
+                    userId,
+                    mode: sessionData.mode || 'paper',
+                    capital: sessionData.capital || 100000,
+                    status: 'active',
+                    endTime: sessionData.endTime || null
+                }
             });
 
             logger.info('Trading session created:', session.id);
@@ -67,60 +64,30 @@ export class UserService {
         }
     }
 
-    async getTradingSession(sessionId: string) {
+    async getActiveTradingSession(userId: string) {
         try {
-            const session = await db.findUnique('TradingSession', { id: sessionId });
-            return session;
-        } catch (error) {
-            logger.error('Failed to get trading session:', error);
-            throw error;
-        }
-    }
-
-    async getActiveTradingSessions(userId: string) {
-        try {
-            const sessions = await db.findMany('TradingSession', {
+            const session = await db.tradingSession.findFirst({
                 where: {
                     userId,
-                    status: 'active',
+                    status: 'active'
+                },
+                orderBy: {
+                    startTime: 'desc'
                 }
             });
-            return sessions;
-        } catch (error) {
-            logger.error('Failed to get active trading sessions:', error);
-            throw error;
-        }
-    }
-
-    async updateTradingSession(sessionId: string, updates: Partial<TradingSession>) {
-        try {
-            const session = await db.update('TradingSession', { id: sessionId }, updates);
-            logger.info('Trading session updated:', session.id);
             return session;
         } catch (error) {
-            logger.error('Failed to update trading session:', error);
-            throw error;
-        }
-    }
-
-    async endTradingSession(sessionId: string) {
-        try {
-            const session = await db.update('TradingSession', { id: sessionId }, {
-                status: 'completed',
-                endTime: new Date()
-            });
-            logger.info('Trading session ended:', session.id);
-            return session;
-        } catch (error) {
-            logger.error('Failed to end trading session:', error);
+            logger.error('Failed to get active trading session:', error);
             throw error;
         }
     }
 
     async getAllUsers() {
         try {
-            const users = await db.findMany('User', {
-                orderBy: { createdAt: 'desc' }
+            const users = await db.user.findMany({
+                orderBy: {
+                    createdAt: 'desc'
+                }
             });
             return users;
         } catch (error) {
@@ -129,9 +96,37 @@ export class UserService {
         }
     }
 
-    async deleteUser(userId: string) {
+    async updateUser(id: string, email?: string, name?: string) {
         try {
-            const user = await db.delete('User', { id: userId });
+            const updateData: any = {};
+            if (email !== undefined) updateData.email = email;
+            if (name !== undefined) updateData.name = name;
+
+            const user = await db.user.update({
+                where: { id },
+                data: updateData
+            });
+
+            logger.info('User updated:', user.id);
+            return user;
+        } catch (error) {
+            logger.error('Failed to update user:', error);
+            throw error;
+        }
+    }
+
+    async deleteUser(id: string) {
+        try {
+            // First, delete all related trading sessions
+            await db.tradingSession.deleteMany({
+                where: { userId: id }
+            });
+
+            // Then delete the user
+            const user = await db.user.delete({
+                where: { id }
+            });
+
             logger.info('User deleted:', user.id);
             return user;
         } catch (error) {
@@ -140,17 +135,35 @@ export class UserService {
         }
     }
 
-    async updateUser(userId: string, updates: { name?: string; email?: string }) {
+    async deactivateTradingSession(sessionId: string) {
         try {
-            const updateData = {
-                ...updates,
-                updatedAt: new Date()
-            };
-            const user = await db.update('User', { id: userId }, updateData);
-            logger.info('User updated:', user.id);
-            return user;
+            const session = await db.tradingSession.update({
+                where: { id: sessionId },
+                data: {
+                    status: 'completed',
+                    endTime: new Date()
+                }
+            });
+
+            logger.info('Trading session deactivated:', sessionId);
+            return session;
         } catch (error) {
-            logger.error('Failed to update user:', error);
+            logger.error('Failed to deactivate trading session:', error);
+            throw error;
+        }
+    }
+
+    async getUserTradingSessions(userId: string) {
+        try {
+            const sessions = await db.tradingSession.findMany({
+                where: { userId },
+                orderBy: {
+                    startTime: 'desc'
+                }
+            });
+            return sessions;
+        } catch (error) {
+            logger.error('Failed to get user trading sessions:', error);
             throw error;
         }
     }
