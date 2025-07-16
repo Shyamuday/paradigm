@@ -1,4 +1,4 @@
-import { AutoTOTPZerodhaAuth } from '../auth/easy-auth';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { logger } from '../logger/logger';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -51,14 +51,14 @@ export interface HistoricalData {
 }
 
 export class InstrumentsManager {
-    private auth: AutoTOTPZerodhaAuth;
+    private auth: ZerodhaAuth;
     private instruments: Map<string, ZerodhaInstrument> = new Map();
     private marketData: Map<number, MarketQuote> = new Map();
     private dataDir: string;
     private updateInterval: NodeJS.Timeout | null = null;
     private watchlist: Set<number> = new Set();
 
-    constructor(auth: AutoTOTPZerodhaAuth) {
+    constructor(auth: ZerodhaAuth) {
         this.auth = auth;
         this.dataDir = path.join(process.cwd(), 'data');
         if (!fs.existsSync(this.dataDir)) {
@@ -72,23 +72,32 @@ export class InstrumentsManager {
     async getAllInstruments(): Promise<ZerodhaInstrument[]> {
         try {
             logger.info('📊 Fetching all instruments...');
-            const response = await this.auth.apiCall('/instruments');
-
-            // Parse CSV response
-            const instruments = this.parseInstrumentsCSV(response);
-
+            // Use KiteConnect SDK
+            const instrumentsRaw = await this.auth.getKite().getInstruments();
+            // Map and convert types
+            const instruments: ZerodhaInstrument[] = instrumentsRaw.map((inst: any) => ({
+                instrument_token: Number(inst.instrument_token),
+                exchange_token: Number(inst.exchange_token),
+                tradingsymbol: inst.tradingsymbol,
+                name: inst.name,
+                last_price: Number(inst.last_price),
+                expiry: inst.expiry,
+                strike: Number(inst.strike),
+                tick_size: Number(inst.tick_size),
+                lot_size: Number(inst.lot_size),
+                instrument_type: inst.instrument_type,
+                segment: inst.segment,
+                exchange: inst.exchange
+            }));
             // Store in memory for quick access
             this.instruments.clear();
             instruments.forEach(instrument => {
                 this.instruments.set(instrument.tradingsymbol, instrument);
             });
-
             // Save to file for offline access
             this.saveInstrumentsToFile(instruments);
-
             logger.info(`✅ Loaded ${instruments.length} instruments`);
             return instruments;
-
         } catch (error) {
             logger.error('❌ Failed to fetch instruments:', error);
             throw error;
@@ -101,12 +110,26 @@ export class InstrumentsManager {
     async getInstrumentsByExchange(exchange: 'NSE' | 'BSE' | 'NFO' | 'BFO' | 'CDS' | 'MCX'): Promise<ZerodhaInstrument[]> {
         try {
             logger.info(`📊 Fetching instruments for ${exchange}...`);
-            const response = await this.auth.apiCall(`/instruments/${exchange}`);
-
-            const instruments = this.parseInstrumentsCSV(response);
+            // Use KiteConnect SDK and filter by exchange
+            const allInstrumentsRaw = await this.auth.getKite().getInstruments();
+            const instruments: ZerodhaInstrument[] = allInstrumentsRaw
+                .filter((inst: any) => inst.exchange === exchange)
+                .map((inst: any) => ({
+                    instrument_token: Number(inst.instrument_token),
+                    exchange_token: Number(inst.exchange_token),
+                    tradingsymbol: inst.tradingsymbol,
+                    name: inst.name,
+                    last_price: Number(inst.last_price),
+                    expiry: inst.expiry,
+                    strike: Number(inst.strike),
+                    tick_size: Number(inst.tick_size),
+                    lot_size: Number(inst.lot_size),
+                    instrument_type: inst.instrument_type,
+                    segment: inst.segment,
+                    exchange: inst.exchange
+                }));
             logger.info(`✅ Loaded ${instruments.length} instruments for ${exchange}`);
             return instruments;
-
         } catch (error) {
             logger.error(`❌ Failed to fetch instruments for ${exchange}:`, error);
             throw error;
@@ -140,15 +163,14 @@ export class InstrumentsManager {
             const tokenString = instrumentTokens.join(',');
             logger.info(`📈 Fetching quotes for ${instrumentTokens.length} instruments...`);
 
-            const response = await this.auth.apiCall(`/quote?i=${tokenString}`);
+            // Use KiteConnect SDK
+            const tokens = instrumentTokens.map(String);
+            const response = await this.auth.getKite().getQuote(tokens);
             const quotes = new Map<number, MarketQuote>();
-
-            // Process the response data
-            for (const [key, data] of Object.entries(response.data)) {
+            for (const [key, data] of Object.entries(response)) {
                 const instrumentToken = parseInt(key);
                 quotes.set(instrumentToken, data as MarketQuote);
             }
-
             logger.info(`✅ Fetched quotes for ${quotes.size} instruments`);
             return quotes;
 
@@ -166,14 +188,14 @@ export class InstrumentsManager {
             const tokenString = instrumentTokens.join(',');
             logger.info(`💰 Fetching LTP for ${instrumentTokens.length} instruments...`);
 
-            const response = await this.auth.apiCall(`/ltp?i=${tokenString}`);
+            // Use KiteConnect SDK
+            const tokens = instrumentTokens.map(String);
+            const response = await this.auth.getKite().getLTP(tokens);
             const ltps = new Map<number, number>();
-
-            for (const [key, data] of Object.entries(response.data)) {
+            for (const [key, data] of Object.entries(response)) {
                 const instrumentToken = parseInt(key);
                 ltps.set(instrumentToken, (data as any).last_price);
             }
-
             logger.info(`✅ Fetched LTP for ${ltps.size} instruments`);
             return ltps;
 
@@ -191,14 +213,14 @@ export class InstrumentsManager {
             const tokenString = instrumentTokens.join(',');
             logger.info(`📊 Fetching OHLC for ${instrumentTokens.length} instruments...`);
 
-            const response = await this.auth.apiCall(`/ohlc?i=${tokenString}`);
+            // Use KiteConnect SDK
+            const tokens = instrumentTokens.map(String);
+            const response = await this.auth.getKite().getOHLC(tokens);
             const ohlcData = new Map<number, any>();
-
-            for (const [key, data] of Object.entries(response.data)) {
+            for (const [key, data] of Object.entries(response)) {
                 const instrumentToken = parseInt(key);
                 ohlcData.set(instrumentToken, data);
             }
-
             logger.info(`✅ Fetched OHLC for ${ohlcData.size} instruments`);
             return ohlcData;
 
@@ -213,30 +235,41 @@ export class InstrumentsManager {
      */
     async getHistoricalData(
         instrumentToken: number,
-        interval: 'minute' | '3minute' | '5minute' | '15minute' | '30minute' | 'hour' | 'day',
+        interval: 'minute' | '3minute' | '5minute' | '10minute' | '15minute' | '30minute' | '60minute' | 'day',
         fromDate: string,
         toDate: string
     ): Promise<HistoricalData[]> {
         try {
             logger.info(`📈 Fetching historical data for ${instrumentToken}...`);
-
-            const response = await this.auth.apiCall(
-                `/instruments/historical/${instrumentToken}/${interval}?from=${fromDate}&to=${toDate}`
+            // Validate interval
+            const allowedIntervals = [
+                'minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'
+            ];
+            if (!allowedIntervals.includes(interval)) {
+                throw new Error(`Invalid interval: ${interval}`);
+            }
+            const safeInterval = interval as (
+                'minute' | '3minute' | '5minute' | '10minute' | '15minute' | '30minute' | '60minute' | 'day'
             );
-
-            const historicalData: HistoricalData[] = response.data.candles.map((candle: any[]) => ({
-                date: candle[0],
-                open: candle[1],
-                high: candle[2],
-                low: candle[3],
-                close: candle[4],
-                volume: candle[5],
-                oi: candle[6] || undefined
+            // Use KiteConnect SDK
+            // @ts-ignore: safeInterval is guaranteed by runtime check
+            const data = await this.auth.getKite().getHistoricalData(
+                instrumentToken,
+                fromDate,
+                toDate,
+                safeInterval
+            );
+            logger.info(`✅ Fetched ${Array.isArray(data) ? data.length : 0} historical data points`);
+            // The SDK returns an array of candles, map to HistoricalData[]
+            return (Array.isArray(data) ? data : []).map((candle: any) => ({
+                date: candle.date instanceof Date ? candle.date.toISOString() : String(candle.date),
+                open: Number(candle.open),
+                high: Number(candle.high),
+                low: Number(candle.low),
+                close: Number(candle.close),
+                volume: Number(candle.volume),
+                ...(candle.oi !== undefined ? { oi: Number(candle.oi) } : {})
             }));
-
-            logger.info(`✅ Fetched ${historicalData.length} historical records`);
-            return historicalData;
-
         } catch (error) {
             logger.error('❌ Failed to fetch historical data:', error);
             throw error;
@@ -348,31 +381,25 @@ export class InstrumentsManager {
     private parseInstrumentsCSV(csvData: string): ZerodhaInstrument[] {
         const lines = csvData.split('\n');
         const instruments: ZerodhaInstrument[] = [];
-
-        // Skip header line
         for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const line = lines[i]?.trim();
             if (!line) continue;
-
             const parts = line.split(',');
-            if (parts.length >= 12) {
-                instruments.push({
-                    instrument_token: parseInt(parts[0]) || 0,
-                    exchange_token: parseInt(parts[1]) || 0,
-                    tradingsymbol: parts[2] || '',
-                    name: parts[3] || '',
-                    last_price: parseFloat(parts[4]) || 0,
-                    expiry: parts[5] || '',
-                    strike: parseFloat(parts[6]) || 0,
-                    tick_size: parseFloat(parts[7]) || 0,
-                    lot_size: parseInt(parts[8]) || 0,
-                    instrument_type: parts[9] || '',
-                    segment: parts[10] || '',
-                    exchange: parts[11] || ''
-                });
-            }
+            instruments.push({
+                instrument_token: parseInt(parts[0] ?? '0') || 0,
+                exchange_token: parseInt(parts[1] ?? '0') || 0,
+                tradingsymbol: parts[2] ?? '',
+                name: parts[3] ?? '',
+                last_price: parseFloat(parts[4] ?? '0') || 0,
+                expiry: parts[5] ?? '',
+                strike: parseFloat(parts[6] ?? '0') || 0,
+                tick_size: parseFloat(parts[7] ?? '0') || 0,
+                lot_size: parseInt(parts[8] ?? '0') || 0,
+                instrument_type: parts[9] ?? '',
+                segment: parts[10] ?? '',
+                exchange: parts[11] ?? ''
+            });
         }
-
         return instruments;
     }
 

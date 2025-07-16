@@ -7,6 +7,7 @@ import { TransactionCostService } from './transaction-cost.service';
 import { OptionsTechnicalAnalysisService } from './options-technical-analysis';
 import { TimeframeManagerService } from './timeframe-manager.service';
 import { Prisma, BacktestResult as PrismaBacktestResult, Strategy, Instrument } from '@prisma/client';
+import { InstrumentsManager } from './instruments-manager.service';
 
 interface BacktestConfig {
     startDate: Date;
@@ -57,9 +58,11 @@ export class BacktestService {
     private strategyService: StrategyService;
     private orderService: OrderService;
     private transactionCostService: TransactionCostService;
+    private instrumentsManager: InstrumentsManager;
 
-    constructor() {
-        this.marketDataService = new MarketDataService();
+    constructor(instrumentsManager: InstrumentsManager) {
+        this.instrumentsManager = instrumentsManager;
+        this.marketDataService = new MarketDataService(instrumentsManager);
         this.strategyService = new StrategyService();
         this.orderService = new OrderService();
         this.transactionCostService = new TransactionCostService();
@@ -247,8 +250,16 @@ export class BacktestService {
 
     private async getHistoricalDataForSymbols(symbols: string[], startDate: Date, endDate: Date) {
         const allData = [];
+        const allInstruments = await this.instrumentsManager.getAllInstruments();
         for (const symbol of symbols) {
-            const data = await this.marketDataService.getHistoricalData(symbol, startDate, endDate);
+            const instrument = allInstruments.find(inst => inst.tradingsymbol === symbol);
+            if (!instrument) continue;
+            const data = await this.marketDataService.getHistoricalData(
+                instrument.instrument_token,
+                'day',
+                startDate.toISOString().split('T')[0],
+                endDate.toISOString().split('T')[0]
+            );
             allData.push(...data);
         }
         return allData;

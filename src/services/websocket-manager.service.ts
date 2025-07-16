@@ -1,6 +1,7 @@
-import { AutoTOTPZerodhaAuth } from '../auth/easy-auth';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { logger } from '../logger/logger';
 import { EventEmitter } from 'events';
+import { KiteConnect } from 'kiteconnect';
 
 export interface TickData {
     instrument_token: number;
@@ -26,7 +27,7 @@ export interface TickData {
 }
 
 export class WebSocketManager extends EventEmitter {
-    private auth: AutoTOTPZerodhaAuth;
+    private auth: ZerodhaAuth;
     private ws: any = null;
     private subscribedTokens: Set<number> = new Set();
     private isConnected: boolean = false;
@@ -34,7 +35,7 @@ export class WebSocketManager extends EventEmitter {
     private maxReconnectAttempts: number = 5;
     private reconnectInterval: number = 5000;
 
-    constructor(auth: AutoTOTPZerodhaAuth) {
+    constructor(auth: ZerodhaAuth) {
         super();
         this.auth = auth;
     }
@@ -48,16 +49,16 @@ export class WebSocketManager extends EventEmitter {
 
             // Import KiteConnect WebSocket
             const KiteTicker = require('kiteconnect').KiteTicker;
-            const session = this.auth.getSession();
+            const kite = this.auth.getKite();
 
-            if (!session) {
+            if (!this.auth.checkSession()) {
                 throw new Error('No active session found');
             }
 
             // Create ticker instance
             this.ws = new KiteTicker({
-                api_key: process.env.ZERODHA_API_KEY,
-                access_token: session.accessToken
+                api_key: kite.getApiKey(),
+                access_token: kite.getAccessToken()
             });
 
             // Set up event handlers
@@ -230,4 +231,4 @@ export class WebSocketManager extends EventEmitter {
         this.subscribedTokens.clear();
         logger.info('🧹 All subscriptions cleared');
     }
-} 
+}

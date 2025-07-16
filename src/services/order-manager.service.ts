@@ -262,8 +262,7 @@ export class OrderManager {
      */
     async getHoldings(): Promise<any[]> {
         try {
-            const response = await this.auth.apiCall('/portfolio/holdings');
-            return response.data;
+            return await this.kite.getHoldings();
         } catch (error) {
             logger.error('❌ Failed to fetch holdings:', error);
             throw error;

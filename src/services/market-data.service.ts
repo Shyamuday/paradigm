@@ -1,8 +1,15 @@
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import { TickData, CandleData, InstrumentConfig } from '../types';
+import { InstrumentsManager } from './instruments-manager.service';
 
 export class MarketDataService {
+    private instrumentsManager: InstrumentsManager;
+
+    constructor(instrumentsManager: InstrumentsManager) {
+        this.instrumentsManager = instrumentsManager;
+    }
+
     async createInstrument(config: InstrumentConfig) {
         try {
             const instrument = await db.instrument.create({
@@ -189,25 +196,27 @@ export class MarketDataService {
         }
     }
 
-    async getHistoricalData(symbol: string, from: Date, to: Date) {
+    async getHistoricalData(symbolOrToken: string | number, interval: string, fromDate: string, toDate: string) {
         try {
-            const instrument = await this.getInstrumentBySymbol(symbol);
-            if (!instrument) {
-                return [];
+            let instrumentToken: number;
+            if (typeof symbolOrToken === 'number') {
+                instrumentToken = symbolOrToken;
+            } else {
+                // Lookup instrument token by symbol
+                const allInstruments = await this.instrumentsManager.getAllInstruments();
+                const instrument = allInstruments.find(inst => inst.tradingsymbol === symbolOrToken);
+                if (!instrument) {
+                    throw new Error(`Instrument not found for symbol: ${symbolOrToken}`);
+                }
+                instrumentToken = instrument.instrument_token;
             }
-
-            const historicalData = await db.marketData.findMany({
-                where: {
-                    instrumentId: instrument.id,
-                    timestamp: {
-                        gte: from,
-                        lte: to,
-                    },
-                },
-                orderBy: { timestamp: 'asc' },
-            });
-
-            return historicalData;
+            // Use SDK for historical data
+            return await this.instrumentsManager.getHistoricalData(
+                instrumentToken,
+                interval,
+                fromDate,
+                toDate
+            );
         } catch (error) {
             logger.error('Failed to get historical data:', error);
             throw error;

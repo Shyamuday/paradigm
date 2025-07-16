@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
 import { logger } from '../logger/logger';
-import { AutoTOTPZerodhaAuth } from '../auth/auto-totp-example';
-import { InstrumentsManagerService } from './instruments-manager.service';
-import { OrderManagerService } from './order-manager.service';
-import { WebSocketManagerService } from './websocket-manager.service';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
+import { InstrumentsManager } from './instruments-manager.service';
+import { OrderManager } from './order-manager.service';
+import { WebSocketManager } from './websocket-manager.service';
 import { EnhancedStrategyService } from './enhanced-strategy.service';
 import { RiskService } from './risk.service';
 import { PortfolioService } from './portfolio.service';
@@ -49,16 +49,16 @@ export interface TradingStats {
 }
 
 export class AutomatedTradingService extends EventEmitter {
-    private auth: AutoTOTPZerodhaAuth;
-    private instrumentsManager: InstrumentsManagerService;
-    private orderManager: OrderManagerService;
-    private websocketManager: WebSocketManagerService;
+    private auth: ZerodhaAuth;
+    private instrumentsManager: InstrumentsManager;
+    private orderManager: OrderManager;
+    private websocketManager: WebSocketManager;
     private strategyService: EnhancedStrategyService;
     private riskService: RiskService;
     private portfolioService: PortfolioService;
 
-    private isRunning: boolean = false;
-    private tradingConfig: TradingConfig;
+    private running: boolean = false;
+    private tradingConfig!: TradingConfig;
     private activeStrategies: Map<string, any> = new Map();
     private activePositions: Map<string, Position> = new Map();
     private tradingSession: TradingSession | null = null;
@@ -67,10 +67,10 @@ export class AutomatedTradingService extends EventEmitter {
 
     constructor() {
         super();
-        this.auth = new AutoTOTPZerodhaAuth();
-        this.instrumentsManager = new InstrumentsManagerService();
-        this.orderManager = new OrderManagerService();
-        this.websocketManager = new WebSocketManagerService();
+        this.auth = new ZerodhaAuth();
+        this.instrumentsManager = new InstrumentsManager(this.auth);
+        this.orderManager = new OrderManager(this.auth, this.instrumentsManager);
+        this.websocketManager = new WebSocketManager(this.auth);
         this.strategyService = new EnhancedStrategyService();
         this.riskService = new RiskService();
         this.portfolioService = new PortfolioService();
@@ -80,28 +80,34 @@ export class AutomatedTradingService extends EventEmitter {
 
     private setupEventHandlers(): void {
         // WebSocket price updates
-        this.websocketManager.on('price_update', (data) => {
+        this.websocketManager.on('ticks', (data: MarketData[]) => {
             this.handlePriceUpdate(data);
         });
 
         // Order execution events
-        this.orderManager.on('order_filled', (order) => {
-            this.handleOrderFilled(order);
-        });
+        if (this.orderManager instanceof EventEmitter) {
+            this.orderManager.on('order_filled', (order: any) => {
+                this.handleOrderFilled(order);
+            });
 
-        this.orderManager.on('order_rejected', (order) => {
-            this.handleOrderRejected(order);
-        });
+            this.orderManager.on('order_rejected', (order: any) => {
+                this.handleOrderRejected(order);
+            });
+        }
 
         // Risk management events
-        this.riskService.on('risk_breach', (riskEvent) => {
-            this.handleRiskBreach(riskEvent);
-        });
+        if (this.riskService instanceof EventEmitter) {
+            this.riskService.on('risk_breach', (riskEvent: any) => {
+                this.handleRiskBreach(riskEvent);
+            });
+        }
 
         // Portfolio updates
-        this.portfolioService.on('position_update', (position) => {
-            this.handlePositionUpdate(position);
-        });
+        if (this.portfolioService instanceof EventEmitter) {
+            this.portfolioService.on('position_update', (position: Position) => {
+                this.handlePositionUpdate(position);
+            });
+        }
     }
 
     async initialize(config: TradingConfig): Promise<void> {
@@ -110,16 +116,11 @@ export class AutomatedTradingService extends EventEmitter {
 
             this.tradingConfig = config;
 
-            // Initialize authentication
-            await this.auth.login();
+            // Initialize authentication if no valid session
+            if (!this.auth.checkSession()) {
+                await this.auth.startOAuthLogin();
+            }
             logger.info('Authentication successful');
-
-            // Initialize services
-            await this.instrumentsManager.initialize();
-            await this.orderManager.initialize();
-            await this.websocketManager.initialize();
-            await this.riskService.initialize();
-            await this.portfolioService.initialize();
 
             // Create trading session
             this.tradingSession = await this.createTradingSession();
@@ -140,7 +141,7 @@ export class AutomatedTradingService extends EventEmitter {
     }
 
     async startTrading(): Promise<void> {
-        if (this.isRunning) {
+        if (this.running) {
             logger.warn('Trading service is already running');
             return;
         }
@@ -163,7 +164,7 @@ export class AutomatedTradingService extends EventEmitter {
             // Start risk monitoring
             this.startRiskMonitoring();
 
-            this.isRunning = true;
+            this.running = true;
             logger.info('Automated trading started successfully');
             this.emit('trading_started');
 
@@ -174,7 +175,7 @@ export class AutomatedTradingService extends EventEmitter {
     }
 
     async stopTrading(): Promise<void> {
-        if (!this.isRunning) {
+        if (!this.running) {
             logger.warn('Trading service is not running');
             return;
         }
@@ -182,7 +183,7 @@ export class AutomatedTradingService extends EventEmitter {
         try {
             logger.info('Stopping automated trading...');
 
-            this.isRunning = false;
+            this.running = false;
 
             // Stop market data streaming
             await this.websocketManager.stopStreaming();
@@ -229,7 +230,7 @@ export class AutomatedTradingService extends EventEmitter {
 
     private startStrategyExecutionLoop(): void {
         const executeStrategies = async () => {
-            if (!this.isRunning) return;
+            if (!this.running) return;
 
             try {
                 for (const [strategyName, strategy] of this.activeStrategies) {
@@ -250,7 +251,7 @@ export class AutomatedTradingService extends EventEmitter {
 
     private startPositionMonitoring(): void {
         const monitorPositions = async () => {
-            if (!this.isRunning) return;
+            if (!this.running) return;
 
             try {
                 for (const [symbol, position] of this.activePositions) {
@@ -269,7 +270,7 @@ export class AutomatedTradingService extends EventEmitter {
 
     private startRiskMonitoring(): void {
         const monitorRisk = async () => {
-            if (!this.isRunning) return;
+            if (!this.running) return;
 
             try {
                 await this.checkRiskLimits();
@@ -381,11 +382,11 @@ export class AutomatedTradingService extends EventEmitter {
         }
     }
 
-    private async handlePriceUpdate(data: any): Promise<void> {
+    private async handlePriceUpdate(data: MarketData[]): Promise<void> {
         try {
-            const symbol = data.instrument_token;
-            const price = data.last_price;
-            const volume = data.volume;
+            const symbol = data[0].symbol;
+            const price = data[0].ltp;
+            const volume = data[0].volume;
             const timestamp = new Date();
 
             // Update market data cache
@@ -394,10 +395,10 @@ export class AutomatedTradingService extends EventEmitter {
                 ltp: price,
                 volume,
                 timestamp,
-                high: data.ohlc?.high,
-                low: data.ohlc?.low,
-                open: data.ohlc?.open,
-                close: data.ohlc?.close
+                high: data[0].high,
+                low: data[0].low,
+                open: data[0].open,
+                close: data[0].close
             };
 
             this.updateMarketDataCache(symbol, marketData);
@@ -844,7 +845,7 @@ export class AutomatedTradingService extends EventEmitter {
     }
 
     isRunning(): boolean {
-        return this.isRunning;
+        return this.running;
     }
 
     private async handleOrderRejected(order: any): Promise<void> {

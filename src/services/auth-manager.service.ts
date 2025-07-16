@@ -1,24 +1,15 @@
 import { EventEmitter } from 'events';
-import { AutoTOTPZerodhaAuth, AutoTOTPConfig, SavedSession } from '../auth/easy-auth';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { logger } from '../logger/logger';
 
 export class AuthManagerService extends EventEmitter {
     private static instance: AuthManagerService;
-    private auth: AutoTOTPZerodhaAuth | null = null;
-    private config: AutoTOTPConfig;
+    private auth: ZerodhaAuth | null = null;
     private loginStatus: 'idle' | 'logging_in' | 'logged_in' | 'error' = 'idle';
     private lastError: string | null = null;
 
     private constructor() {
         super();
-        this.config = {
-            apiKey: process.env.ZERODHA_API_KEY || '',
-            apiSecret: process.env.ZERODHA_API_SECRET || '',
-            userId: process.env.ZERODHA_USER_ID || '',
-            password: process.env.ZERODHA_PASSWORD || '',
-            totpSecret: process.env.ZERODHA_TOTP_SECRET || '',
-            redirectUri: process.env.ZERODHA_REDIRECT_URI || 'https://127.0.0.1'
-        };
     }
 
     public static getInstance(): AuthManagerService {
@@ -32,7 +23,7 @@ export class AuthManagerService extends EventEmitter {
         return {
             status: this.loginStatus,
             error: this.lastError,
-            isAuthenticated: this.auth?.getSession() !== null
+            isAuthenticated: this.auth?.checkSession() || false
         };
     }
 
@@ -41,15 +32,22 @@ export class AuthManagerService extends EventEmitter {
             this.loginStatus = 'logging_in';
             this.emit('status_change', this.getStatus());
 
-            this.auth = new AutoTOTPZerodhaAuth(this.config);
+            this.auth = new ZerodhaAuth();
 
-            // Authenticate automatically with TOTP
-            const session = await this.auth.authenticate();
+            // Check if we have a valid session
+            if (this.auth.checkSession()) {
+                this.loginStatus = 'logged_in';
+                this.lastError = null;
+                this.emit('status_change', this.getStatus());
+                return;
+            }
+
+            // Start OAuth login flow if no valid session
+            await this.auth.startOAuthLogin();
 
             this.loginStatus = 'logged_in';
             this.lastError = null;
             this.emit('status_change', this.getStatus());
-            this.emit('session_update', session);
 
         } catch (error: any) {
             this.loginStatus = 'error';
@@ -59,14 +57,20 @@ export class AuthManagerService extends EventEmitter {
         }
     }
 
-    public async makeAuthenticatedRequest(endpoint: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', data?: any): Promise<any> {
+    public getKite() {
         if (!this.auth) {
             throw new Error('Auth not initialized');
         }
-        return this.auth.apiCall(endpoint, method, data);
+        return this.auth.getKite();
     }
 
-    public getSession(): SavedSession | null {
-        return this.auth?.getSession() || null;
+    public async logout(): Promise<void> {
+        if (!this.auth) {
+            throw new Error('Auth not initialized');
+        }
+        await this.auth.logout();
+        this.loginStatus = 'idle';
+        this.lastError = null;
+        this.emit('status_change', this.getStatus());
     }
-} 
+}
