@@ -73,4 +73,4 @@ export class AuthManagerService extends EventEmitter {
         this.lastError = null;
         this.emit('status_change', this.getStatus());
     }
-}
+} 
