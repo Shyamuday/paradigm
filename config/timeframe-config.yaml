@@ -1,0 +1,150 @@
+# Multi-Timeframe Data Management Configuration
+
+# Timeframe Definitions
+timeframes:
+  - name: "1min"
+    description: "1 Minute Candles"
+    intervalMinutes: 1
+    isActive: true
+    retentionDays: 7
+    aggregationEnabled: true
+
+  - name: "3min"
+    description: "3 Minute Candles"
+    intervalMinutes: 3
+    isActive: true
+    retentionDays: 14
+    aggregationEnabled: true
+
+  - name: "5min"
+    description: "5 Minute Candles"
+    intervalMinutes: 5
+    isActive: true
+    retentionDays: 30
+    aggregationEnabled: true
+
+  - name: "15min"
+    description: "15 Minute Candles"
+    intervalMinutes: 15
+    isActive: true
+    retentionDays: 60
+    aggregationEnabled: true
+
+  - name: "30min"
+    description: "30 Minute Candles"
+    intervalMinutes: 30
+    isActive: true
+    retentionDays: 90
+    aggregationEnabled: true
+
+  - name: "1hour"
+    description: "1 Hour Candles"
+    intervalMinutes: 60
+    isActive: true
+    retentionDays: 180
+    aggregationEnabled: true
+
+  - name: "1day"
+    description: "1 Day Candles"
+    intervalMinutes: 1440
+    isActive: true
+    retentionDays: 365
+    aggregationEnabled: true
+
+# Data Storage Settings
+storage:
+  # Tick data retention (real-time data)
+  tickDataRetentionDays: 7
+
+  # Batch processing settings
+  batchSize: 1000
+  maxConcurrentAggregations: 5
+
+  # Performance settings
+  enableIndexing: true
+  enableCompression: false
+
+  # Cleanup settings
+  autoCleanup: true
+  cleanupIntervalHours: 24
+
+# Aggregation Settings
+aggregation:
+  # Real-time aggregation
+  realTimeEnabled: true
+  realTimeDelaySeconds: 1
+
+  # Batch aggregation
+  batchEnabled: true
+  batchIntervalMinutes: 5
+
+  # Quality checks
+  enableDataValidation: true
+  minVolumeThreshold: 0
+  maxPriceChangePercent: 50
+
+# Performance Optimization
+performance:
+  # Caching
+  enableCaching: true
+  cacheSize: 10000
+  cacheTTLMinutes: 30
+
+  # Database optimization
+  enablePartitioning: false
+  partitionByMonth: true
+
+  # Query optimization
+  maxQueryLimit: 10000
+  enableQueryTimeout: true
+  queryTimeoutSeconds: 30
+
+# Monitoring and Logging
+monitoring:
+  # Data quality monitoring
+  enableDataQualityChecks: true
+  alertOnDataGaps: true
+  alertOnHighLatency: true
+
+  # Performance monitoring
+  trackAggregationTime: true
+  trackStorageMetrics: true
+
+  # Logging
+  logLevel: "info"
+  logAggregationEvents: true
+  logStorageEvents: true
+
+# Instruments Configuration
+instruments:
+  # Default settings for all instruments
+  default:
+    enabledTimeframes: ["1min", "5min", "15min", "1hour", "1day"]
+    priority: "normal"
+
+  # Specific instrument overrides
+  overrides:
+    "NIFTY":
+      enabledTimeframes:
+        ["1min", "3min", "5min", "15min", "30min", "1hour", "1day"]
+      priority: "high"
+
+    "BANKNIFTY":
+      enabledTimeframes:
+        ["1min", "3min", "5min", "15min", "30min", "1hour", "1day"]
+      priority: "high"
+
+    "RELIANCE":
+      enabledTimeframes: ["1min", "5min", "15min", "1hour", "1day"]
+      priority: "normal"
+
+# Backup and Recovery
+backup:
+  # Data backup settings
+  enableBackup: true
+  backupIntervalHours: 24
+  backupRetentionDays: 30
+
+  # Recovery settings
+  enablePointInTimeRecovery: true
+  recoveryRetentionDays: 7
