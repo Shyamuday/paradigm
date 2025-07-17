@@ -3,14 +3,25 @@ import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
 import open from 'open';
+import { logger } from '../logger/logger';
+import {
+    SessionDataSchema,
+    ZerodhaLoginResponseSchema,
+    AccessTokenValidationSchema,
+    ZerodhaErrorResponseSchema,
+    type SessionData,
+    type ZerodhaLoginResponse,
+    type AccessTokenValidation
+} from '../schemas/auth.schema';
+import { z } from 'zod';
 
-// Session data interface
+// Session data interface (legacy for file storage)
 interface SavedSession {
     access_token: string;
-    refresh_token?: string;
+    refresh_token?: string | undefined;
     user_id: string;
-    user_name?: string;
-    email?: string;
+    user_name?: string | undefined;
+    email?: string | undefined;
     expires_at: string;
     login_time: string;
 }
@@ -72,8 +83,17 @@ export class ZerodhaAuth {
                     console.log('\n✅ Received request token');
                     console.log('Generating session...');
 
-                    // Generate session
-                    const session = await this.kite.generateSession(requestToken, this.apiSecret);
+                    // Generate session with validation
+                    const sessionResponse = await this.kite.generateSession(requestToken, this.apiSecret);
+                    
+                    // Validate the response using Zod
+                    const validatedSession = ZerodhaLoginResponseSchema.parse(sessionResponse);
+                    
+                    if (validatedSession.status === 'error' || !validatedSession.data) {
+                        throw new Error(validatedSession.message || 'Login failed');
+                    }
+
+                    const session = validatedSession.data;
 
                     // Set the access token
                     this.kite.setAccessToken(session.access_token);
@@ -81,10 +101,10 @@ export class ZerodhaAuth {
                     // Save session info
                     await this.saveSession({
                         access_token: session.access_token,
-                        refresh_token: session.refresh_token,
+                        refresh_token: session.refresh_token || undefined,
                         user_id: session.user_id,
                         user_name: session.user_name,
-                        email: session.email,
+                        email: session.email || undefined,
                         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                         login_time: new Date().toISOString()
                     });
@@ -101,8 +121,9 @@ export class ZerodhaAuth {
                     `);
 
                     // Test API access
-                    const profile = await this.kite.getProfile();
-                    console.log('\nAPI Connection Test:', profile ? '✅ Successful' : '❌ Failed');
+                    const profileTestResponse = await this.kite.getProfile();
+                    const validatedProfileTest = AccessTokenValidationSchema.parse(profileTestResponse);
+                    console.log('\nAPI Connection Test:', validatedProfileTest.status === 'success' ? '✅ Successful' : '❌ Failed');
 
                     resolve();
                 } catch (error) {
@@ -143,15 +164,24 @@ export class ZerodhaAuth {
             // Set the access token
             this.kite.setAccessToken(accessToken);
 
-            // Verify token by getting profile
-            const profile = await this.kite.getProfile();
+            // Verify token by getting profile with validation
+            const profileResponse = await this.kite.getProfile();
+            
+            // Validate the profile response using Zod
+            const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
+            
+            if (validatedProfile.status === 'error' || !validatedProfile.data) {
+                throw new Error(validatedProfile.message || 'Token validation failed');
+            }
+
+            const profile = validatedProfile.data;
 
             // Save session
             await this.saveSession({
                 access_token: accessToken,
                 user_id: profile.user_id,
                 user_name: profile.user_name,
-                email: profile.email,
+                email: profile.email || undefined,
                 expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
                 login_time: new Date().toISOString()
             });
@@ -197,10 +227,18 @@ export class ZerodhaAuth {
 
             // Set the access token and test it
             this.kite.setAccessToken(sessionData.access_token);
-            const profile = await this.kite.getProfile();
+            const profileResponse = await this.kite.getProfile();
+            
+            // Validate the profile response
+            const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
+            
+            if (validatedProfile.status === 'error' || !validatedProfile.data) {
+                logger.warn('Session validation failed:', validatedProfile.message);
+                return false;
+            }
 
             console.log('\n✅ Valid session found');
-            console.log(`User: ${profile.user_name}`);
+            console.log(`User: ${validatedProfile.data.user_name}`);
 
             return true;
         } catch (error) {

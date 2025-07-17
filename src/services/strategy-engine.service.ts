@@ -1,21 +1,29 @@
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import {
-    StrategyConfig,
-    TradeSignal,
-    StrategyResult,
-    StrategyType,
-    StrategyRule,
-    TechnicalIndicator,
-    IndicatorType,
-    MarketData,
-    Position,
-    StrategyState,
-    StrategyPerformance,
-    StrategyTemplate,
-    RiskManagementConfig,
-    PositionSizingConfig
-} from '../types';
+    StrategyConfigSchema,
+    TradeSignalSchema,
+    StrategyResultSchema,
+    StrategyStateSchema,
+    StrategyPerformanceSchema,
+    StrategyTemplateSchema,
+    PositionSchema,
+    type StrategyConfig,
+    type TradeSignal,
+    type StrategyResult,
+    type StrategyType,
+    type StrategyRule,
+    type TechnicalIndicator,
+    type IndicatorType,
+    type MarketData,
+    type Position,
+    type StrategyState,
+    type StrategyPerformance,
+    type StrategyTemplate,
+    type RiskManagementConfig,
+    type PositionSizingConfig
+} from '../schemas/strategy.schema';
+import { z } from 'zod';
 
 // Base Strategy Interface
 export interface IStrategy {
@@ -40,9 +48,9 @@ export abstract class BaseStrategy implements IStrategy {
     public version: string;
     public description?: string;
 
-    protected config: StrategyConfig;
+    protected config!: StrategyConfig;
     protected indicators: Map<string, TechnicalIndicator> = new Map();
-    protected state: StrategyState;
+    protected state!: StrategyState;
 
     constructor(name: string, type: StrategyType, version: string, description?: string) {
         this.name = name;
@@ -75,24 +83,19 @@ export abstract class BaseStrategy implements IStrategy {
         const sizing = this.config.positionSizing;
 
         switch (sizing.method) {
-            case 'FIXED_AMOUNT':
-                return sizing.fixedAmount || 0;
+            case 'FIXED':
+                return sizing.value;
 
-            case 'PERCENTAGE_OF_CAPITAL':
-                return (capital * (sizing.percentageOfCapital || 0)) / 100;
+            case 'PERCENTAGE':
+                return (capital * sizing.value) / 100;
 
-            case 'RISK_PER_TRADE':
-                const riskAmount = capital * (sizing.riskPerTrade || 0) / 100;
-                const stopLossDistance = Math.abs(signal.price - (signal.stopLoss || 0));
-                return stopLossDistance > 0 ? riskAmount / stopLossDistance : 0;
-
-            case 'KELLY_CRITERION':
+            case 'KELLY':
                 return this.calculateKellyCriterion(signal, capital);
 
-            case 'VOLATILITY_BASED':
+            case 'VOLATILITY':
                 return this.calculateVolatilityBasedSize(signal, capital);
 
-            case 'CUSTOM_FORMULA':
+            case 'CUSTOM':
                 return this.evaluateCustomFormula(sizing.customFormula || '', signal, capital);
 
             default:
