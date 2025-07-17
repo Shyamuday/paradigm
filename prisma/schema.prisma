@@ -21,6 +21,17 @@ model User {
   // Trading sessions
   sessions TradingSession[]
   
+  // Risk management
+  riskProfile RiskProfile?
+  
+  // Alerts
+  alerts Alert[]
+  
+  // API monitoring
+  apiUsage ApiUsage[]
+  apiQuotas ApiQuota[]
+  apiErrors ApiError[]
+  
   @@map("users")
 }
 
@@ -38,6 +49,8 @@ model TradingSession {
   // Related data
   trades      Trade[]
   positions   Position[]
+  riskMetrics RiskMetrics[]
+  optionsPositions OptionsPosition[] // Added relation
   
   @@map("trading_sessions")
 }
@@ -55,15 +68,223 @@ model Instrument {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
+  // Options-specific fields
+  underlyingSymbol String?  // For options: underlying stock/index
+  strikePrice      Float?   // For options: strike price
+  expiryDate       DateTime? // For options: expiry date
+  optionType       String?  // CE (Call), PE (Put)
+  contractSize     Int?     // Number of shares per contract
+  
   // Related data
   trades       Trade[]
   positions    Position[]
   marketData   MarketData[]
+  candleData   CandleData[]
+  tickData     TickData[]
+  volumeProfiles VolumeProfile[]
+  alerts       Alert[]
+  backtestTrades BacktestTrade[]
+  
+  // Options-specific relations
+  optionsChains OptionsChain[] @relation("InstrumentToOptionsChain") // Updated relation
+  optionsGreeks OptionsGreeks[]
+  optionsPositions OptionsPosition[]
+  optionsContracts OptionsContract[] // Added relation
   
   @@map("instruments")
 }
 
-// Market data (historical and live)
+// Options Chain - represents all available options for an underlying
+model OptionsChain {
+  id              String   @id @default(cuid())
+  underlyingSymbol String
+  expiryDate      DateTime
+  timestamp       DateTime @default(now())
+  isActive        Boolean  @default(true)
+  
+  // Chain metadata
+  totalCallContracts Int    @default(0)
+  totalPutContracts  Int    @default(0)
+  totalCallVolume    Int    @default(0)
+  totalPutVolume     Int    @default(0)
+  totalCallOI        Int    @default(0)
+  totalPutOI         Int    @default(0)
+  
+  // Related data
+  optionsContracts OptionsContract[]
+  instrument Instrument @relation("InstrumentToOptionsChain", fields: [underlyingSymbol], references: [symbol]) // Updated relation
+  
+  @@unique([underlyingSymbol, expiryDate])
+  @@index([underlyingSymbol, expiryDate], name: "options_chain_underlying_expiry_idx")
+  @@index([expiryDate], name: "options_chain_expiry_idx")
+  @@map("options_chains")
+}
+
+// Individual options contracts
+model OptionsContract {
+  id              String   @id @default(cuid())
+  chainId         String
+  chain           OptionsChain @relation(fields: [chainId], references: [id])
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  
+  // Contract details
+  strikePrice     Float
+  optionType      String   // CE, PE
+  expiryDate      DateTime
+  lotSize         Int
+  tickSize        Float
+  
+  // Market data
+  lastPrice       Float?
+  bidPrice        Float?
+  askPrice        Float?
+  bidSize         Int?
+  askSize         Int?
+  volume          Int      @default(0)
+  openInterest    Int      @default(0)
+  change          Float?
+  changePercent   Float?
+  
+  // Greeks (real-time)
+  delta           Float?
+  gamma           Float?
+  theta           Float?
+  vega            Float?
+  rho             Float?
+  
+  // Volatility
+  impliedVolatility Float?
+  historicalVolatility Float?
+  
+  // Additional metrics
+  intrinsicValue  Float?
+  timeValue       Float?
+  inTheMoney      Boolean?
+  outOfTheMoney   Boolean?
+  atTheMoney      Boolean?
+  
+  // Timestamps
+  lastUpdated     DateTime @default(now())
+  
+  @@unique([chainId, strikePrice, optionType])
+  @@index([chainId, strikePrice], name: "options_contract_chain_strike_idx")
+  @@index([strikePrice, optionType], name: "options_contract_strike_type_idx")
+  @@index([expiryDate], name: "options_contract_expiry_idx")
+  @@index([impliedVolatility], name: "options_contract_iv_idx")
+  @@map("options_contracts")
+}
+
+// Historical Greeks data
+model OptionsGreeks {
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timestamp       DateTime
+  underlyingPrice Float
+  
+  // Greeks
+  delta           Float
+  gamma           Float
+  theta           Float
+  vega            Float
+  rho             Float?
+  
+  // Volatility
+  impliedVolatility Float
+  historicalVolatility Float?
+  
+  // Additional metrics
+  intrinsicValue  Float
+  timeValue       Float
+  inTheMoney      Boolean
+  
+  @@unique([instrumentId, timestamp])
+  @@index([instrumentId, timestamp], name: "options_greeks_instrument_time_idx")
+  @@index([timestamp], name: "options_greeks_time_idx")
+  @@map("options_greeks")
+}
+
+// Options-specific positions
+model OptionsPosition {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         TradingSession @relation(fields: [sessionId], references: [id])
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  strategyId      String?
+  strategy        Strategy? @relation(fields: [strategyId], references: [id])
+  
+  // Position details
+  quantity        Int      // Positive for long, negative for short
+  averagePrice    Float
+  currentPrice    Float?
+  
+  // Options-specific fields
+  strikePrice     Float
+  optionType      String   // CE, PE
+  expiryDate      DateTime
+  underlyingSymbol String
+  underlyingPrice Float?
+  
+  // Greeks exposure
+  delta           Float?
+  gamma           Float?
+  theta           Float?
+  vega            Float?
+  
+  // Risk metrics
+  maxProfit       Float?
+  maxLoss         Float?
+  breakEvenPoints Json?    // Array of break-even prices
+  
+  // Strategy metadata
+  strategyType    String?  // COVERED_CALL, IRON_CONDOR, etc.
+  legType         String?  // For multi-leg strategies
+  
+  // P&L tracking
+  unrealizedPnL   Float?
+  realizedPnL     Float?
+  
+  // Related data
+  strategyLegs OptionsStrategyLeg[] // Added relation
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([sessionId, instrumentId], name: "options_position_session_instrument_idx")
+  @@map("options_positions")
+}
+
+// Options strategy legs
+model OptionsStrategyLeg {
+  id             String   @id @default(cuid())
+  strategyId     String
+  strategy       Strategy @relation(fields: [strategyId], references: [id])
+  positionId     String?
+  position       OptionsPosition? @relation(fields: [positionId], references: [id])
+  
+  // Leg details
+  legType        String   // BUY_CALL, SELL_PUT, etc.
+  strikePrice    Float
+  optionType     String   // CE, PE
+  quantity       Int
+  
+  // Greeks contribution
+  deltaContribution Float?
+  gammaContribution Float?
+  thetaContribution Float?
+  vegaContribution  Float?
+  
+  // P&L contribution
+  pnlContribution   Float?
+  
+  @@index([strategyId], name: "options_strategy_leg_strategy_idx")
+  @@map("options_strategy_legs")
+}
+
+// Market data
 model MarketData {
   id           String   @id @default(cuid())
   instrumentId String
@@ -74,12 +295,91 @@ model MarketData {
   low          Float?
   close        Float?
   volume       Int?
-  ltp          Float?  // Last traded price
-  change       Float?  // Price change
-  changePercent Float? // Price change percentage
   
   @@unique([instrumentId, timestamp])
+  @@index([instrumentId, timestamp], name: "market_data_instrument_time_idx")
+  @@index([timestamp], name: "market_data_time_idx")
   @@map("market_data")
+}
+
+// Timeframe configuration
+model TimeframeConfig {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?
+  intervalMinutes Int
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Related data
+  candleData      CandleData[]
+  volumeProfiles  VolumeProfile[] // Added relation
+  
+  @@map("timeframe_config")
+}
+
+// Candle data
+model CandleData {
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timeframeId     String
+  timeframe       TimeframeConfig @relation(fields: [timeframeId], references: [id])
+  timestamp       DateTime
+  open            Float
+  high            Float
+  low             Float
+  close           Float
+  volume          Int
+  typicalPrice    Float?
+  weightedPrice   Float?
+  priceChange     Float?
+  priceChangePercent Float?
+  upperShadow     Float?
+  lowerShadow     Float?
+  bodySize        Float?
+  totalRange      Float?
+  
+  @@unique([instrumentId, timeframeId, timestamp])
+  @@index([instrumentId, timeframeId, timestamp], name: "candle_data_instrument_timeframe_time_idx")
+  @@index([instrumentId, timeframeId, timestamp(sort: Desc)], name: "candle_data_latest_idx") // For latest data queries
+  @@map("candle_data")
+}
+
+// Tick data
+model TickData {
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timestamp       DateTime
+  ltp             Float
+  volume          Int
+  change          Float?
+  changePercent   Float?
+  
+  @@unique([instrumentId, timestamp])
+  @@index([instrumentId, timestamp], name: "tick_data_instrument_time_idx")
+  @@index([timestamp], name: "tick_data_time_idx") // For time-based queries
+  @@index([instrumentId, timestamp(sort: Desc)], name: "tick_data_latest_idx") // For latest data queries
+  @@map("tick_data")
+}
+
+// Volume profile data
+model VolumeProfile {
+  id              String   @id @default(cuid())
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  timeframeId     String
+  timeframe       TimeframeConfig @relation(fields: [timeframeId], references: [id])
+  date            DateTime @db.Date
+  priceLevel      Float
+  volume          Int
+  poc             Boolean  // Point of Control
+  
+  @@unique([instrumentId, timeframeId, date, priceLevel])
+  @@index([instrumentId, timeframeId, date], name: "volume_profile_instrument_timeframe_date_idx")
+  @@map("volume_profiles")
 }
 
 // Trading strategies
@@ -94,6 +394,9 @@ model Strategy {
   
   // Related data
   trades      Trade[]
+  backtestResults BacktestResult[]
+  optionsPositions OptionsPosition[]
+  optionsStrategyLegs OptionsStrategyLeg[]
   
   @@map("strategies")
 }
@@ -131,6 +434,8 @@ model Trade {
   
   // Related data
   positions    Position[]
+  transactionCost TransactionCost?
+  tradingFees  TradingFees[]
   
   @@map("trades")
 }
@@ -149,22 +454,252 @@ model Position {
   quantity     Int
   averagePrice Float
   currentPrice Float?
-  side         String   // LONG, SHORT
   
-  // Risk management
-  stopLoss     Float?
-  target       Float?
-  trailingStop Boolean  @default(false)
-  
-  // P&L
+  // P&L tracking
   unrealizedPnL Float?
   realizedPnL   Float?
   
   // Timestamps
-  openTime     DateTime @default(now())
-  closeTime    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   
+  @@index([sessionId, instrumentId])
   @@map("positions")
+}
+
+// Risk profile for users
+model RiskProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  riskTolerance   String   // LOW, MEDIUM, HIGH
+  maxDrawdown     Float    // Maximum allowed drawdown percentage
+  maxDailyLoss    Float    // Maximum daily loss percentage
+  maxPositionSize Float    // Maximum position size in currency
+  maxOpenPositions Int     // Maximum number of open positions
+  
+  // Options-specific risk limits
+  maxDelta        Float?   // Maximum delta exposure
+  maxGamma        Float?   // Maximum gamma exposure
+  maxTheta        Float?   // Maximum theta exposure
+  maxVega         Float?   // Maximum vega exposure
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("risk_profiles")
+}
+
+// Risk metrics tracking
+model RiskMetrics {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         TradingSession @relation(fields: [sessionId], references: [id])
+  timestamp       DateTime
+  
+  // Portfolio metrics
+  totalValue      Float
+  totalPnL        Float
+  dailyPnL        Float
+  drawdown        Float
+  
+  // Options-specific metrics
+  portfolioDelta  Float?
+  portfolioGamma  Float?
+  portfolioTheta  Float?
+  portfolioVega   Float?
+  
+  // Risk ratios
+  sharpeRatio     Float?
+  sortinoRatio    Float?
+  maxDrawdown     Float?
+  
+  @@index([sessionId, timestamp])
+  @@map("risk_metrics")
+}
+
+// Alerts system
+model Alert {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  instrumentId String?
+  instrument  Instrument? @relation(fields: [instrumentId], references: [id])
+  
+  // Alert details
+  type        String   // PRICE, VOLUME, TECHNICAL, OPTIONS_GREEKS
+  condition   String   // ABOVE, BELOW, CROSSES
+  value       Float
+  isActive    Boolean  @default(true)
+  
+  // Options-specific alerts
+  greekType   String?  // DELTA, GAMMA, THETA, VEGA
+  strikePrice Float?
+  optionType  String?  // CE, PE
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Related data
+  notifications AlertNotification[]
+  
+  @@map("alerts")
+}
+
+// Alert notifications
+model AlertNotification {
+  id        String   @id @default(cuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  message   String
+  triggeredAt DateTime @default(now())
+  isRead    Boolean  @default(false)
+  
+  @@map("alert_notifications")
+}
+
+// Backtest results
+model BacktestResult {
+  id          String   @id @default(cuid())
+  strategyId  String
+  strategy    Strategy @relation(fields: [strategyId], references: [id])
+  
+  // Backtest parameters
+  startDate   DateTime
+  endDate     DateTime
+  initialCapital Float
+  instruments  Json     // Array of instrument symbols
+  
+  // Results
+  finalCapital Float
+  totalReturn  Float
+  annualizedReturn Float
+  maxDrawdown  Float
+  sharpeRatio  Float?
+  sortinoRatio Float?
+  
+  // Options-specific results
+  totalOptionsTrades Int @default(0)
+  optionsWinRate     Float?
+  averageOptionsPnL  Float?
+  
+  createdAt   DateTime @default(now())
+  
+  // Related data
+  trades      BacktestTrade[]
+  
+  @@map("backtest_results")
+}
+
+// Backtest trades
+model BacktestTrade {
+  id              String   @id @default(cuid())
+  backtestId      String
+  backtest        BacktestResult @relation(fields: [backtestId], references: [id])
+  instrumentId    String
+  instrument      Instrument @relation(fields: [instrumentId], references: [id])
+  
+  // Trade details
+  action          String   // BUY, SELL
+  quantity        Int
+  price           Float
+  timestamp       DateTime
+  
+  // P&L
+  pnl             Float?
+  
+  // Options-specific fields
+  strikePrice     Float?
+  optionType      String?
+  expiryDate      DateTime?
+  
+  @@map("backtest_trades")
+}
+
+// Transaction costs
+model TransactionCost {
+  id              String   @id @default(cuid())
+  tradeId         String   @unique
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+  
+  // Cost breakdown
+  brokerage       Float
+  stt            Float
+  exchangeFee    Float
+  gst            Float
+  sebiCharges    Float
+  stampDuty      Float
+  sebiTurnover   Float
+  totalCost      Float
+  costPercentage Float   // Cost as percentage of trade value
+  
+  @@map("transaction_costs")
+}
+
+// Brokerage plans
+model BrokeragePlan {
+  id                String   @id @default(cuid())
+  brokerName        String
+  planName          String
+  equityDelivery    Float    // Per trade or percentage
+  equityIntraday    Float
+  equityFutures     Float
+  equityOptions     Float
+  currencyFutures   Float
+  currencyOptions   Float
+  commodityFutures  Float
+  commodityOptions  Float
+  dpCharges         Float    // Demat charges
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  
+  @@unique([brokerName, planName])
+  @@map("brokerage_plans")
+}
+
+// API Usage Monitoring
+model ApiUsage {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  endpoint      String   // quotes, orders, positions, etc.
+  method        String   // GET, POST, PUT, DELETE
+  requestCount  Int      @default(0)
+  errorCount    Int      @default(0)
+  avgResponseTime Float? // In milliseconds
+  date          DateTime @db.Date
+  hour          Int      // 0-23 for hourly tracking
+  
+  @@unique([userId, endpoint, method, date, hour])
+  @@map("api_usage")
+}
+
+model ApiQuota {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  endpoint      String
+  dailyLimit    Int
+  currentUsage  Int      @default(0)
+  resetTime     DateTime // When the quota resets
+  isExceeded    Boolean  @default(false)
+  
+  @@unique([userId, endpoint])
+  @@map("api_quotas")
+}
+
+model ApiError {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  endpoint     String
+  errorCode    String
+  errorMessage String
+  requestData  Json?
+  responseData Json?
+  timestamp    DateTime @default(now())
+  
+  @@map("api_errors")
 }
 
 // System logs
@@ -190,4 +725,107 @@ model Config {
   updatedAt   DateTime @updatedAt
   
   @@map("configs")
+} 
+
+model ExchangeFeeConfig {
+  id                    String   @id @default(uuid())
+  exchangeId           String   @unique
+  brokerageFeePercent  Float
+  transactionTaxPercent Float
+  stampDutyPercent     Float
+  exchangeChargesPercent Float
+  gstPercent           Float
+  sebiChargesPercent   Float
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model TradingFees {
+  id              String   @id @default(uuid())
+  tradeId         String   @unique
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+  tradeValue      Float
+  action          String
+  brokerageFee    Float
+  transactionTax  Float
+  stampDuty       Float
+  exchangeCharges Float
+  gst             Float
+  sebiCharges     Float
+  totalFees       Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Performance monitoring and analytics
+model DatabasePerformance {
+  id              String   @id @default(cuid())
+  tableName       String
+  operation       String   // INSERT, UPDATE, DELETE, SELECT
+  executionTime   Float    // In milliseconds
+  rowsAffected    Int?
+  timestamp       DateTime @default(now())
+  queryHash       String?  // Hash of the query for grouping
+  
+  @@index([tableName, timestamp])
+  @@index([operation, timestamp])
+  @@map("database_performance")
+}
+
+model DataQualityMetrics {
+  id              String   @id @default(cuid())
+  tableName       String
+  metricType      String   // GAPS, DUPLICATES, INVALID_DATA, LATENCY
+  metricValue     Float
+  threshold       Float
+  isViolated      Boolean
+  details         Json?    // Additional details about the violation
+  timestamp       DateTime @default(now())
+  
+  @@index([tableName, metricType, timestamp])
+  @@map("data_quality_metrics")
+}
+
+model DataRetentionPolicy {
+  id              String   @id @default(cuid())
+  tableName       String
+  retentionDays   Int
+  archivalDays    Int      // Days before archival
+  compressionDays Int      // Days before compression
+  isActive        Boolean  @default(true)
+  lastCleanup     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([tableName])
+  @@map("data_retention_policies")
+}
+
+// Cache management for frequently accessed data
+model DataCache {
+  id              String   @id @default(cuid())
+  cacheKey        String   @unique
+  cacheValue      Json
+  expiresAt       DateTime
+  lastAccessed    DateTime @default(now())
+  accessCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+  
+  @@index([expiresAt]) // For cleanup queries
+  @@index([lastAccessed]) // For LRU eviction
+  @@map("data_cache")
+}
+
+// Database connection pooling metrics
+model ConnectionPoolMetrics {
+  id              String   @id @default(cuid())
+  totalConnections Int
+  activeConnections Int
+  idleConnections  Int
+  waitingConnections Int
+  maxConnections   Int
+  timestamp       DateTime @default(now())
+  
+  @@index([timestamp])
+  @@map("connection_pool_metrics")
 } 
