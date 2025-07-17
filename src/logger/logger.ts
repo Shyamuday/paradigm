@@ -1,66 +1,65 @@
 import winston from 'winston';
 import path from 'path';
+import fs from 'fs/promises';
+import { LoggingConfig } from '../config/config.schema';
 
-// Create logs directory if it doesn't exist
-const fs = require('fs');
-const logsDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
+const createDefaultLogger = () => {
+  return winston.createLogger({
+    level: 'info',
+    transports: [new winston.transports.Console()],
+  });
+};
+
+let logger: winston.Logger = createDefaultLogger();
+
+export async function initializeLogger(config: LoggingConfig): Promise<void> {
+  const logsDir = path.join(process.cwd(), 'logs');
+  await fs.mkdir(logsDir, { recursive: true });
+
+  const logFormat = winston.format.combine(
+    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  );
+
+  const consoleFormat = winston.format.combine(
+    winston.format.colorize(),
+    winston.format.timestamp({ format: 'HH:mm:ss' }),
+    winston.format.printf(({ timestamp, level, message, ...meta }) => {
+      let msg = `${timestamp} [${level}]: ${message}`;
+      if (Object.keys(meta).length > 0) {
+        msg += ` ${JSON.stringify(meta)}`;
+      }
+      return msg;
+    })
+  );
+
+  logger.configure({
+    level: config.level,
+    format: logFormat,
+    defaultMeta: { service: 'trading-bot' },
+    transports: [
+      new winston.transports.Console({
+        format: consoleFormat,
+      }),
+      new winston.transports.File({
+        filename: path.join(logsDir, 'trading-bot.log'),
+        maxsize: parseInt(config.maxFileSize),
+        maxFiles: config.maxFiles,
+        tailable: true,
+      }),
+      new winston.transports.File({
+        filename: path.join(logsDir, 'error.log'),
+        level: 'error',
+        maxsize: parseInt(config.maxFileSize),
+        maxFiles: config.maxFiles,
+        tailable: true,
+      }),
+    ],
+  });
 }
 
-// Define log format
-const logFormat = winston.format.combine(
-  winston.format.timestamp({
-    format: 'YYYY-MM-DD HH:mm:ss'
-  }),
-  winston.format.errors({ stack: true }),
-  winston.format.json()
-);
-
-// Define console format for development
-const consoleFormat = winston.format.combine(
-  winston.format.colorize(),
-  winston.format.timestamp({
-    format: 'HH:mm:ss'
-  }),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
-    if (Object.keys(meta).length > 0) {
-      msg += ` ${JSON.stringify(meta)}`;
-    }
-    return msg;
-  })
-);
-
-// Create logger instance
-export const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: logFormat,
-  defaultMeta: { service: 'trading-bot' },
-  transports: [
-    // Console transport
-    new winston.transports.Console({
-      format: consoleFormat
-    }),
-    
-    // File transport for all logs
-    new winston.transports.File({
-      filename: path.join(logsDir, 'trading-bot.log'),
-      maxsize: 10 * 1024 * 1024, // 10MB
-      maxFiles: 5,
-      tailable: true
-    }),
-    
-    // Error file transport
-    new winston.transports.File({
-      filename: path.join(logsDir, 'error.log'),
-      level: 'error',
-      maxsize: 10 * 1024 * 1024, // 10MB
-      maxFiles: 5,
-      tailable: true
-    })
-  ]
-});
+export { logger };
 
 // Add stream for Morgan HTTP logging
 export const logStream = {
