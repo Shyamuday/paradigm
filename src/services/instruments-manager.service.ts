@@ -18,26 +18,54 @@ export interface ZerodhaInstrument {
     exchange: string;
 }
 
+export interface MarketDepth {
+    price: number;
+    quantity: number;
+    orders: number;
+}
+
 export interface MarketQuote {
     instrument_token: number;
+    timestamp: string;
+    last_trade_time: string;
     last_price: number;
     last_quantity: number;
-    average_price: number;
-    volume: number;
     buy_quantity: number;
     sell_quantity: number;
+    volume: number;
+    average_price: number;
+    oi: number;
+    oi_day_high: number;
+    oi_day_low: number;
+    net_change: number;
+    lower_circuit_limit: number;
+    upper_circuit_limit: number;
     ohlc: {
         open: number;
         high: number;
         low: number;
         close: number;
     };
-    net_change: number;
-    oi: number;
-    oi_day_high: number;
-    oi_day_low: number;
-    timestamp: string;
-    last_trade_time: string;
+    depth: {
+        buy: MarketDepth[];
+        sell: MarketDepth[];
+    };
+}
+
+export interface OHLCQuote {
+    instrument_token: number;
+    last_price: number;
+    ohlc: {
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+    };
+}
+
+export interface LTPQuote {
+    instrument_token: number;
+    last_price: number;
 }
 
 export interface HistoricalData {
@@ -53,10 +81,11 @@ export interface HistoricalData {
 export class InstrumentsManager {
     private auth: ZerodhaAuth;
     private instruments: Map<string, ZerodhaInstrument> = new Map();
-    private marketData: Map<number, MarketQuote> = new Map();
+    private instrumentsByToken: Map<number, ZerodhaInstrument> = new Map();
+    private marketData: Map<string, MarketQuote> = new Map();
     private dataDir: string;
     private updateInterval: NodeJS.Timeout | null = null;
-    private watchlist: Set<number> = new Set();
+    private watchlist: Set<string> = new Set();
 
     constructor(auth: ZerodhaAuth) {
         this.auth = auth;
@@ -68,39 +97,35 @@ export class InstrumentsManager {
 
     /**
      * Get all available instruments from all exchanges
+     * Returns CSV dump of all tradable instruments
      */
     async getAllInstruments(): Promise<ZerodhaInstrument[]> {
         try {
             logger.info('📊 Fetching all instruments...');
-            // Use KiteConnect SDK
-            const instrumentsRaw = await this.auth.getKite().getInstruments();
-            // Map and convert types
-            const instruments: ZerodhaInstrument[] = instrumentsRaw.map((inst: any) => ({
-                instrument_token: Number(inst.instrument_token),
-                exchange_token: Number(inst.exchange_token),
-                tradingsymbol: inst.tradingsymbol,
-                name: inst.name,
-                last_price: Number(inst.last_price),
-                expiry: inst.expiry,
-                strike: Number(inst.strike),
-                tick_size: Number(inst.tick_size),
-                lot_size: Number(inst.lot_size),
-                instrument_type: inst.instrument_type,
-                segment: inst.segment,
-                exchange: inst.exchange
-            }));
+
+            const kite = this.auth.getKite();
+            const instrumentsRaw = await kite.getInstruments();
+
+            const instruments: ZerodhaInstrument[] = this.parseInstrumentsResponse(instrumentsRaw);
+
             // Store in memory for quick access
             this.instruments.clear();
+            this.instrumentsByToken.clear();
+
             instruments.forEach(instrument => {
                 this.instruments.set(instrument.tradingsymbol, instrument);
+                this.instrumentsByToken.set(instrument.instrument_token, instrument);
             });
+
             // Save to file for offline access
-            this.saveInstrumentsToFile(instruments);
+            await this.saveInstrumentsToFile(instruments);
+
             logger.info(`✅ Loaded ${instruments.length} instruments`);
             return instruments;
+
         } catch (error) {
             logger.error('❌ Failed to fetch instruments:', error);
-            throw error;
+            throw new Error(`Failed to fetch instruments: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -110,29 +135,18 @@ export class InstrumentsManager {
     async getInstrumentsByExchange(exchange: 'NSE' | 'BSE' | 'NFO' | 'BFO' | 'CDS' | 'MCX'): Promise<ZerodhaInstrument[]> {
         try {
             logger.info(`📊 Fetching instruments for ${exchange}...`);
-            // Use KiteConnect SDK and filter by exchange
-            const allInstrumentsRaw = await this.auth.getKite().getInstruments();
-            const instruments: ZerodhaInstrument[] = allInstrumentsRaw
-                .filter((inst: any) => inst.exchange === exchange)
-                .map((inst: any) => ({
-                    instrument_token: Number(inst.instrument_token),
-                    exchange_token: Number(inst.exchange_token),
-                    tradingsymbol: inst.tradingsymbol,
-                    name: inst.name,
-                    last_price: Number(inst.last_price),
-                    expiry: inst.expiry,
-                    strike: Number(inst.strike),
-                    tick_size: Number(inst.tick_size),
-                    lot_size: Number(inst.lot_size),
-                    instrument_type: inst.instrument_type,
-                    segment: inst.segment,
-                    exchange: inst.exchange
-                }));
+
+            const kite = this.auth.getKite();
+            const instrumentsRaw = await kite.getInstruments([exchange]);
+
+            const instruments: ZerodhaInstrument[] = this.parseInstrumentsResponse(instrumentsRaw);
+
             logger.info(`✅ Loaded ${instruments.length} instruments for ${exchange}`);
             return instruments;
+
         } catch (error) {
             logger.error(`❌ Failed to fetch instruments for ${exchange}:`, error);
-            throw error;
+            throw new Error(`Failed to fetch instruments for ${exchange}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -152,81 +166,117 @@ export class InstrumentsManager {
             }
         }
 
-        return results.slice(0, 50); // Limit results
+        return results.slice(0, 50); // Limit results to 50
     }
 
     /**
-     * Get market quotes for multiple instruments
+     * Get instrument by trading symbol
      */
-    async getMarketQuotes(instrumentTokens: number[]): Promise<Map<number, MarketQuote>> {
-        try {
-            const tokenString = instrumentTokens.join(',');
-            logger.info(`📈 Fetching quotes for ${instrumentTokens.length} instruments...`);
+    getInstrumentBySymbol(tradingsymbol: string): ZerodhaInstrument | null {
+        return this.instruments.get(tradingsymbol) || null;
+    }
 
-            // Use KiteConnect SDK
-            const tokens = instrumentTokens.map(String);
-            const response = await this.auth.getKite().getQuote(tokens);
-            const quotes = new Map<number, MarketQuote>();
-            for (const [key, data] of Object.entries(response)) {
-                const instrumentToken = parseInt(key);
-                quotes.set(instrumentToken, data as MarketQuote);
+    /**
+     * Get instrument by token
+     */
+    getInstrumentByToken(instrumentToken: number): ZerodhaInstrument | null {
+        return this.instrumentsByToken.get(instrumentToken) || null;
+    }
+
+    /**
+     * Get full market quotes for multiple instruments (up to 500)
+     * Returns complete market data including depth, OHLC, and OI
+     */
+    async getMarketQuotes(instruments: string[]): Promise<Map<string, MarketQuote>> {
+        try {
+            if (instruments.length > 500) {
+                throw new Error('Cannot fetch quotes for more than 500 instruments at once');
             }
-            logger.info(`✅ Fetched quotes for ${quotes.size} instruments`);
+
+            logger.info(`📈 Fetching full market quotes for ${instruments.length} instruments...`);
+
+            const kite = this.auth.getKite();
+            const response = await kite.getQuote(instruments);
+
+            const quotes = new Map<string, MarketQuote>();
+
+            for (const [key, data] of Object.entries(response)) {
+                if (data && typeof data === 'object') {
+                    const quote = this.parseMarketQuote(data);
+                    quotes.set(key, quote);
+                }
+            }
+
+            logger.info(`✅ Fetched full quotes for ${quotes.size} instruments`);
             return quotes;
 
         } catch (error) {
             logger.error('❌ Failed to fetch market quotes:', error);
-            throw error;
+            throw new Error(`Failed to fetch market quotes: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
-     * Get Last Traded Price (LTP) for multiple instruments
+     * Get OHLC quotes for multiple instruments (up to 1000)
      */
-    async getLTP(instrumentTokens: number[]): Promise<Map<number, number>> {
+    async getOHLCQuotes(instruments: string[]): Promise<Map<string, OHLCQuote>> {
         try {
-            const tokenString = instrumentTokens.join(',');
-            logger.info(`💰 Fetching LTP for ${instrumentTokens.length} instruments...`);
-
-            // Use KiteConnect SDK
-            const tokens = instrumentTokens.map(String);
-            const response = await this.auth.getKite().getLTP(tokens);
-            const ltps = new Map<number, number>();
-            for (const [key, data] of Object.entries(response)) {
-                const instrumentToken = parseInt(key);
-                ltps.set(instrumentToken, (data as any).last_price);
+            if (instruments.length > 1000) {
+                throw new Error('Cannot fetch OHLC quotes for more than 1000 instruments at once');
             }
-            logger.info(`✅ Fetched LTP for ${ltps.size} instruments`);
-            return ltps;
+
+            logger.info(`📊 Fetching OHLC quotes for ${instruments.length} instruments...`);
+
+            const kite = this.auth.getKite();
+            const response = await kite.getOHLC(instruments);
+
+            const quotes = new Map<string, OHLCQuote>();
+
+            for (const [key, data] of Object.entries(response)) {
+                if (data && typeof data === 'object') {
+                    const quote = this.parseOHLCQuote(data);
+                    quotes.set(key, quote);
+                }
+            }
+
+            logger.info(`✅ Fetched OHLC quotes for ${quotes.size} instruments`);
+            return quotes;
 
         } catch (error) {
-            logger.error('❌ Failed to fetch LTP:', error);
-            throw error;
+            logger.error('❌ Failed to fetch OHLC quotes:', error);
+            throw new Error(`Failed to fetch OHLC quotes: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
-     * Get OHLC data for multiple instruments
+     * Get LTP quotes for multiple instruments (up to 1000)
      */
-    async getOHLC(instrumentTokens: number[]): Promise<Map<number, any>> {
+    async getLTPQuotes(instruments: string[]): Promise<Map<string, LTPQuote>> {
         try {
-            const tokenString = instrumentTokens.join(',');
-            logger.info(`📊 Fetching OHLC for ${instrumentTokens.length} instruments...`);
-
-            // Use KiteConnect SDK
-            const tokens = instrumentTokens.map(String);
-            const response = await this.auth.getKite().getOHLC(tokens);
-            const ohlcData = new Map<number, any>();
-            for (const [key, data] of Object.entries(response)) {
-                const instrumentToken = parseInt(key);
-                ohlcData.set(instrumentToken, data);
+            if (instruments.length > 1000) {
+                throw new Error('Cannot fetch LTP quotes for more than 1000 instruments at once');
             }
-            logger.info(`✅ Fetched OHLC for ${ohlcData.size} instruments`);
-            return ohlcData;
+
+            logger.info(`💰 Fetching LTP quotes for ${instruments.length} instruments...`);
+
+            const kite = this.auth.getKite();
+            const response = await kite.getLTP(instruments);
+
+            const quotes = new Map<string, LTPQuote>();
+
+            for (const [key, data] of Object.entries(response)) {
+                if (data && typeof data === 'object') {
+                    const quote = this.parseLTPQuote(data);
+                    quotes.set(key, quote);
+                }
+            }
+
+            logger.info(`✅ Fetched LTP quotes for ${quotes.size} instruments`);
+            return quotes;
 
         } catch (error) {
-            logger.error('❌ Failed to fetch OHLC:', error);
-            throw error;
+            logger.error('❌ Failed to fetch LTP quotes:', error);
+            throw new Error(`Failed to fetch LTP quotes: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -241,59 +291,47 @@ export class InstrumentsManager {
     ): Promise<HistoricalData[]> {
         try {
             logger.info(`📈 Fetching historical data for ${instrumentToken}...`);
-            // Validate interval
-            const allowedIntervals = [
-                'minute', '3minute', '5minute', '10minute', '15minute', '30minute', '60minute', 'day'
-            ];
-            if (!allowedIntervals.includes(interval)) {
-                throw new Error(`Invalid interval: ${interval}`);
-            }
-            const safeInterval = interval as (
-                'minute' | '3minute' | '5minute' | '10minute' | '15minute' | '30minute' | '60minute' | 'day'
-            );
-            // Use KiteConnect SDK
-            // @ts-ignore: safeInterval is guaranteed by runtime check
-            const data = await this.auth.getKite().getHistoricalData(
-                instrumentToken,
-                fromDate,
-                toDate,
-                safeInterval
-            );
-            logger.info(`✅ Fetched ${Array.isArray(data) ? data.length : 0} historical data points`);
-            // The SDK returns an array of candles, map to HistoricalData[]
-            return (Array.isArray(data) ? data : []).map((candle: any) => ({
-                date: candle.date instanceof Date ? candle.date.toISOString() : String(candle.date),
-                open: Number(candle.open),
-                high: Number(candle.high),
-                low: Number(candle.low),
-                close: Number(candle.close),
-                volume: Number(candle.volume),
-                ...(candle.oi !== undefined ? { oi: Number(candle.oi) } : {})
-            }));
+
+            const kite = this.auth.getKite();
+            const data = await kite.getHistoricalData(instrumentToken, interval, fromDate, toDate);
+
+            const historicalData: HistoricalData[] = Array.isArray(data) ?
+                data.map(candle => this.parseHistoricalCandle(candle)) : [];
+
+            logger.info(`✅ Fetched ${historicalData.length} historical data points`);
+            return historicalData;
+
         } catch (error) {
             logger.error('❌ Failed to fetch historical data:', error);
-            throw error;
+            throw new Error(`Failed to fetch historical data: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
     /**
-     * Add instruments to watchlist for real-time monitoring
+     * Add instruments to watchlist for monitoring
      */
-    addToWatchlist(instrumentTokens: number[]): void {
-        instrumentTokens.forEach(token => this.watchlist.add(token));
-        logger.info(`📋 Added ${instrumentTokens.length} instruments to watchlist`);
+    addToWatchlist(instruments: string[]): void {
+        instruments.forEach(instrument => this.watchlist.add(instrument));
+        logger.info(`📋 Added ${instruments.length} instruments to watchlist`);
     }
 
     /**
      * Remove instruments from watchlist
      */
-    removeFromWatchlist(instrumentTokens: number[]): void {
-        instrumentTokens.forEach(token => this.watchlist.delete(token));
-        logger.info(`📋 Removed ${instrumentTokens.length} instruments from watchlist`);
+    removeFromWatchlist(instruments: string[]): void {
+        instruments.forEach(instrument => this.watchlist.delete(instrument));
+        logger.info(`📋 Removed ${instruments.length} instruments from watchlist`);
     }
 
     /**
-     * Start automatic data updates at specified interval
+     * Get watchlist instruments
+     */
+    getWatchlist(): string[] {
+        return Array.from(this.watchlist);
+    }
+
+    /**
+     * Start automatic data updates
      */
     startAutoUpdates(intervalMs: number = 30000): void {
         if (this.updateInterval) {
@@ -328,90 +366,204 @@ export class InstrumentsManager {
     async updateWatchlistData(): Promise<void> {
         if (this.watchlist.size === 0) return;
 
-        const watchlistArray = Array.from(this.watchlist);
-        const quotes = await this.getMarketQuotes(watchlistArray);
+        try {
+            const watchlistInstruments = Array.from(this.watchlist);
+            const quotes = await this.getMarketQuotes(watchlistInstruments);
 
-        // Update local market data
-        for (const [token, quote] of quotes) {
-            this.marketData.set(token, quote);
+            // Update local market data
+            for (const [key, quote] of quotes) {
+                this.marketData.set(key, quote);
+            }
+
+            logger.info(`🔄 Updated data for ${quotes.size} watchlist instruments`);
+        } catch (error) {
+            logger.error('❌ Failed to update watchlist data:', error);
         }
-
-        logger.info(`🔄 Updated data for ${quotes.size} watchlist instruments`);
     }
 
     /**
      * Get current market data for a specific instrument
      */
-    getMarketData(instrumentToken: number): MarketQuote | null {
-        return this.marketData.get(instrumentToken) || null;
+    getMarketData(instrumentKey: string): MarketQuote | null {
+        return this.marketData.get(instrumentKey) || null;
     }
 
     /**
      * Get all current market data
      */
-    getAllMarketData(): Map<number, MarketQuote> {
+    getAllMarketData(): Map<string, MarketQuote> {
         return new Map(this.marketData);
-    }
-
-    /**
-     * Get watchlist instruments
-     */
-    getWatchlist(): number[] {
-        return Array.from(this.watchlist);
     }
 
     /**
      * Export market data to JSON file
      */
-    exportMarketData(filename?: string): void {
-        const exportData = {
-            timestamp: new Date().toISOString(),
-            instruments: Array.from(this.instruments.entries()),
-            marketData: Array.from(this.marketData.entries()),
-            watchlist: Array.from(this.watchlist)
-        };
+    async exportMarketData(filename?: string): Promise<void> {
+        try {
+            const exportData = {
+                timestamp: new Date().toISOString(),
+                instruments: Array.from(this.instruments.entries()),
+                marketData: Array.from(this.marketData.entries()),
+                watchlist: Array.from(this.watchlist)
+            };
 
-        const filePath = path.join(this.dataDir, filename || 'market_data_export.json');
-        fs.writeFileSync(filePath, JSON.stringify(exportData, null, 2));
-        logger.info(`📁 Market data exported to ${filePath}`);
+            const filePath = path.join(this.dataDir, filename || 'market_data_export.json');
+            await fs.promises.writeFile(filePath, JSON.stringify(exportData, null, 2));
+            logger.info(`📁 Market data exported to ${filePath}`);
+        } catch (error) {
+            logger.error('❌ Failed to export market data:', error);
+            throw new Error(`Failed to export market data: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Load instruments from cache file
+     */
+    async loadInstrumentsFromCache(): Promise<ZerodhaInstrument[]> {
+        try {
+            const filePath = path.join(this.dataDir, 'instruments.json');
+
+            if (!fs.existsSync(filePath)) {
+                return [];
+            }
+
+            const data = await fs.promises.readFile(filePath, 'utf-8');
+            const parsed = JSON.parse(data);
+
+            if (parsed.instruments && Array.isArray(parsed.instruments)) {
+                const instruments = parsed.instruments as ZerodhaInstrument[];
+
+                // Populate maps
+                this.instruments.clear();
+                this.instrumentsByToken.clear();
+
+                instruments.forEach(instrument => {
+                    this.instruments.set(instrument.tradingsymbol, instrument);
+                    this.instrumentsByToken.set(instrument.instrument_token, instrument);
+                });
+
+                logger.info(`📁 Loaded ${instruments.length} instruments from cache`);
+                return instruments;
+            }
+
+            return [];
+        } catch (error) {
+            logger.error('❌ Failed to load instruments from cache:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Check if key exists in response before accessing
+     */
+    private checkKeyExists(response: any, key: string): boolean {
+        return response && typeof response === 'object' && key in response;
     }
 
     // Private helper methods
 
-    private parseInstrumentsCSV(csvData: string): ZerodhaInstrument[] {
-        const lines = csvData.split('\n');
-        const instruments: ZerodhaInstrument[] = [];
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i]?.trim();
-            if (!line) continue;
-            const parts = line.split(',');
-            instruments.push({
-                instrument_token: parseInt(parts[0] ?? '0') || 0,
-                exchange_token: parseInt(parts[1] ?? '0') || 0,
-                tradingsymbol: parts[2] ?? '',
-                name: parts[3] ?? '',
-                last_price: parseFloat(parts[4] ?? '0') || 0,
-                expiry: parts[5] ?? '',
-                strike: parseFloat(parts[6] ?? '0') || 0,
-                tick_size: parseFloat(parts[7] ?? '0') || 0,
-                lot_size: parseInt(parts[8] ?? '0') || 0,
-                instrument_type: parts[9] ?? '',
-                segment: parts[10] ?? '',
-                exchange: parts[11] ?? ''
-            });
-        }
-        return instruments;
+    private parseInstrumentsResponse(rawInstruments: any[]): ZerodhaInstrument[] {
+        return rawInstruments.map(inst => ({
+            instrument_token: Number(inst.instrument_token) || 0,
+            exchange_token: Number(inst.exchange_token) || 0,
+            tradingsymbol: String(inst.tradingsymbol || ''),
+            name: String(inst.name || ''),
+            last_price: Number(inst.last_price) || 0,
+            expiry: String(inst.expiry || ''),
+            strike: Number(inst.strike) || 0,
+            tick_size: Number(inst.tick_size) || 0,
+            lot_size: Number(inst.lot_size) || 0,
+            instrument_type: String(inst.instrument_type || ''),
+            segment: String(inst.segment || ''),
+            exchange: String(inst.exchange || '')
+        }));
     }
 
-    private saveInstrumentsToFile(instruments: ZerodhaInstrument[]): void {
-        const filePath = path.join(this.dataDir, 'instruments.json');
-        const data = {
-            timestamp: new Date().toISOString(),
-            count: instruments.length,
-            instruments: instruments
+    private parseMarketQuote(data: any): MarketQuote {
+        return {
+            instrument_token: Number(data.instrument_token) || 0,
+            timestamp: String(data.timestamp || ''),
+            last_trade_time: String(data.last_trade_time || ''),
+            last_price: Number(data.last_price) || 0,
+            last_quantity: Number(data.last_quantity) || 0,
+            buy_quantity: Number(data.buy_quantity) || 0,
+            sell_quantity: Number(data.sell_quantity) || 0,
+            volume: Number(data.volume) || 0,
+            average_price: Number(data.average_price) || 0,
+            oi: Number(data.oi) || 0,
+            oi_day_high: Number(data.oi_day_high) || 0,
+            oi_day_low: Number(data.oi_day_low) || 0,
+            net_change: Number(data.net_change) || 0,
+            lower_circuit_limit: Number(data.lower_circuit_limit) || 0,
+            upper_circuit_limit: Number(data.upper_circuit_limit) || 0,
+            ohlc: {
+                open: Number(data.ohlc?.open) || 0,
+                high: Number(data.ohlc?.high) || 0,
+                low: Number(data.ohlc?.low) || 0,
+                close: Number(data.ohlc?.close) || 0
+            },
+            depth: {
+                buy: this.parseMarketDepth(data.depth?.buy),
+                sell: this.parseMarketDepth(data.depth?.sell)
+            }
         };
+    }
 
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-        logger.info(`📁 Instruments saved to ${filePath}`);
+    private parseOHLCQuote(data: any): OHLCQuote {
+        return {
+            instrument_token: Number(data.instrument_token) || 0,
+            last_price: Number(data.last_price) || 0,
+            ohlc: {
+                open: Number(data.ohlc?.open) || 0,
+                high: Number(data.ohlc?.high) || 0,
+                low: Number(data.ohlc?.low) || 0,
+                close: Number(data.ohlc?.close) || 0
+            }
+        };
+    }
+
+    private parseLTPQuote(data: any): LTPQuote {
+        return {
+            instrument_token: Number(data.instrument_token) || 0,
+            last_price: Number(data.last_price) || 0
+        };
+    }
+
+    private parseHistoricalCandle(candle: any): HistoricalData {
+        return {
+            date: candle.date instanceof Date ? candle.date.toISOString() : String(candle.date),
+            open: Number(candle.open) || 0,
+            high: Number(candle.high) || 0,
+            low: Number(candle.low) || 0,
+            close: Number(candle.close) || 0,
+            volume: Number(candle.volume) || 0,
+            ...(candle.oi !== undefined ? { oi: Number(candle.oi) || 0 } : {})
+        };
+    }
+
+    private parseMarketDepth(depthData: any[]): MarketDepth[] {
+        if (!Array.isArray(depthData)) return [];
+
+        return depthData.map(item => ({
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 0,
+            orders: Number(item.orders) || 0
+        }));
+    }
+
+    private async saveInstrumentsToFile(instruments: ZerodhaInstrument[]): Promise<void> {
+        try {
+            const filePath = path.join(this.dataDir, 'instruments.json');
+            const data = {
+                timestamp: new Date().toISOString(),
+                count: instruments.length,
+                instruments: instruments
+            };
+
+            await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2));
+            logger.info(`📁 Instruments saved to ${filePath}`);
+        } catch (error) {
+            logger.error('❌ Failed to save instruments to file:', error);
+        }
     }
 } 
