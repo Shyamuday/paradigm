@@ -33,12 +33,12 @@ export class MathUtilsService {
         throw new Error('Cannot calculate statistics for empty array');
       }
 
-      const mean = math.mean(data);
-      const median = math.median(data);
-      const std = math.std(data);
-      const variance = math.variance(data);
-      const min = math.min(data);
-      const max = math.max(data);
+      const mean = Number(math.mean(data));
+      const median = Number(math.median(data));
+      const std = Number(math.std(data));
+      const variance = Number(math.variance(data));
+      const min = Number(math.min(data));
+      const max = Number(math.max(data));
       const range = max - min;
 
       // Calculate skewness
@@ -79,7 +79,7 @@ export class MathUtilsService {
     
     const n = data.length;
     const sum = data.reduce((acc, val) => {
-      return acc + math.pow((val - mean) / std, 3);
+      return acc + Number(math.pow((val - mean) / std, 3));
     }, 0);
     
     return (n / ((n - 1) * (n - 2))) * sum;
@@ -93,7 +93,7 @@ export class MathUtilsService {
     
     const n = data.length;
     const sum = data.reduce((acc, val) => {
-      return acc + math.pow((val - mean) / std, 4);
+      return acc + Number(math.pow((val - mean) / std, 4));
     }, 0);
     
     return (n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) * sum - (3 * (n - 1) * (n - 1) / ((n - 2) * (n - 3)));
@@ -111,8 +111,12 @@ export class MathUtilsService {
       // Calculate returns
       const returns: number[] = [];
       for (let i = 1; i < prices.length; i++) {
-        const return_ = (prices[i] - prices[i - 1]) / prices[i - 1];
-        returns.push(return_);
+        const prevPrice = prices[i - 1];
+        const currentPrice = prices[i];
+        if (prevPrice !== undefined && currentPrice !== undefined) {
+          const return_ = (currentPrice - prevPrice) / prevPrice;
+          returns.push(return_);
+        }
       }
 
       // Calculate cumulative returns
@@ -124,15 +128,15 @@ export class MathUtilsService {
       }
 
       // Calculate Sharpe ratio (assuming risk-free rate of 0)
-      const meanReturn = math.mean(returns);
-      const returnStd = math.std(returns);
+      const meanReturn = Number(math.mean(returns));
+      const returnStd = Number(math.std(returns));
       const sharpeRatio = returnStd !== 0 ? meanReturn / returnStd : 0;
 
       // Calculate maximum drawdown
       const maxDrawdown = this.calculateMaxDrawdown(cumulativeReturns);
 
       // Calculate volatility (annualized)
-      const volatility = returnStd * math.sqrt(252); // Assuming daily data
+      const volatility = returnStd * Number(math.sqrt(252)); // Assuming daily data
 
       // Calculate Value at Risk
       const var95 = this.calculateVaR(returns, 0.05);
@@ -163,6 +167,8 @@ export class MathUtilsService {
    * Calculate maximum drawdown
    */
   private calculateMaxDrawdown(cumulativeReturns: number[]): number {
+    if (cumulativeReturns.length === 0) return 0;
+    
     let maxDrawdown = 0;
     let peak = cumulativeReturns[0];
 
@@ -183,9 +189,11 @@ export class MathUtilsService {
    * Calculate Value at Risk (VaR)
    */
   private calculateVaR(returns: number[], confidenceLevel: number): number {
+    if (returns.length === 0) return 0;
+    
     const sortedReturns = [...returns].sort((a, b) => a - b);
-    const index = math.floor(confidenceLevel * sortedReturns.length);
-    return sortedReturns[index];
+    const index = Math.floor(confidenceLevel * sortedReturns.length);
+    return sortedReturns[index] || 0;
   }
 
   /**
@@ -194,7 +202,7 @@ export class MathUtilsService {
   calculateMovingAverage(data: number[], period: number): number[] {
     try {
       if (data.length < period) {
-        return [];
+        throw new Error(`Insufficient data: need ${period} points, got ${data.length}`);
       }
 
       const result: number[] = [];
@@ -226,7 +234,8 @@ export class MathUtilsService {
       result.push(ema);
 
       for (let i = 1; i < data.length; i++) {
-        ema = (data[i] * multiplier) + (ema * (1 - multiplier));
+        const currentValue = data[i];
+        ema = (currentValue * multiplier) + (ema * (1 - multiplier));
         result.push(ema);
       }
 
@@ -244,7 +253,7 @@ export class MathUtilsService {
   calculateRSI(data: number[], period: number = 14): number[] {
     try {
       if (data.length < period + 1) {
-        return [];
+        throw new Error(`Insufficient data for RSI: need ${period + 1} points, got ${data.length}`);
       }
 
       const gains: number[] = [];
@@ -252,34 +261,42 @@ export class MathUtilsService {
 
       // Calculate price changes
       for (let i = 1; i < data.length; i++) {
-        const change = data[i] - data[i - 1];
-        gains.push(change > 0 ? change : 0);
-        losses.push(change < 0 ? -change : 0);
+        const currentValue = data[i];
+        const prevValue = data[i - 1];
+        
+        if (currentValue !== undefined && prevValue !== undefined) {
+          const change = currentValue - prevValue;
+          gains.push(change > 0 ? change : 0);
+          losses.push(change < 0 ? -change : 0);
+        }
       }
 
-      const rsi: number[] = [];
-      
-      // Calculate initial average gain and loss
+      const result: number[] = [];
       let avgGain = gains.slice(0, period).reduce((a, b) => a + b, 0) / period;
       let avgLoss = losses.slice(0, period).reduce((a, b) => a + b, 0) / period;
 
       // Calculate first RSI
-      let rs = avgGain / avgLoss;
-      let rsiValue = 100 - (100 / (1 + rs));
-      rsi.push(rsiValue);
+      const rs = avgGain / avgLoss;
+      const rsi = 100 - (100 / (1 + rs));
+      result.push(rsi);
 
       // Calculate subsequent RSI values
       for (let i = period; i < gains.length; i++) {
-        avgGain = (avgGain * (period - 1) + gains[i]) / period;
-        avgLoss = (avgLoss * (period - 1) + losses[i]) / period;
+        const currentGain = gains[i];
+        const currentLoss = losses[i];
         
-        rs = avgGain / avgLoss;
-        rsiValue = 100 - (100 / (1 + rs));
-        rsi.push(rsiValue);
+        if (currentGain !== undefined && currentLoss !== undefined) {
+          avgGain = (avgGain * (period - 1) + currentGain) / period;
+          avgLoss = (avgLoss * (period - 1) + currentLoss) / period;
+          
+          const rs = avgGain / avgLoss;
+          const rsi = 100 - (100 / (1 + rs));
+          result.push(rsi);
+        }
       }
 
-      logger.debug(`Calculated RSI`, { period, resultCount: rsi.length });
-      return rsi;
+      logger.debug(`Calculated RSI`, { period, resultCount: result.length });
+      return result;
     } catch (error) {
       logger.error('Error calculating RSI', error);
       throw error;
@@ -295,35 +312,46 @@ export class MathUtilsService {
     histogram: number[];
   } {
     try {
+      if (data.length < slowPeriod) {
+        throw new Error(`Insufficient data for MACD: need ${slowPeriod} points, got ${data.length}`);
+      }
+
       const fastEMA = this.calculateEMA(data, fastPeriod);
       const slowEMA = this.calculateEMA(data, slowPeriod);
 
       // Calculate MACD line
       const macd: number[] = [];
-      const minLength = math.min(fastEMA.length, slowEMA.length);
-      
-      for (let i = 0; i < minLength; i++) {
-        const macdValue = fastEMA[i] - slowEMA[i];
-        macd.push(macdValue);
+      for (let i = 0; i < slowEMA.length; i++) {
+        const fastValue = fastEMA[i];
+        const slowValue = slowEMA[i];
+        
+        if (fastValue !== undefined && slowValue !== undefined) {
+          const macdValue = fastValue - slowValue;
+          macd.push(macdValue);
+        }
       }
 
-      // Calculate signal line (EMA of MACD)
+      // Calculate signal line
       const signal = this.calculateEMA(macd, signalPeriod);
 
       // Calculate histogram
       const histogram: number[] = [];
       const signalLength = signal.length;
-      
       for (let i = 0; i < signalLength; i++) {
-        const histValue = macd[macd.length - signalLength + i] - signal[i];
-        histogram.push(histValue);
+        const macdValue = macd[macd.length - signalLength + i];
+        const signalValue = signal[i];
+        
+        if (macdValue !== undefined && signalValue !== undefined) {
+          const histValue = macdValue - signalValue;
+          histogram.push(histValue);
+        }
       }
 
       logger.debug(`Calculated MACD`, { 
         fastPeriod, 
         slowPeriod, 
         signalPeriod, 
-        resultCount: histogram.length 
+        resultCount: macd.length 
       });
 
       return { macd, signal, histogram };
@@ -342,22 +370,31 @@ export class MathUtilsService {
     lower: number[];
   } {
     try {
+      if (data.length < period) {
+        throw new Error(`Insufficient data for Bollinger Bands: need ${period} points, got ${data.length}`);
+      }
+
       const sma = this.calculateMovingAverage(data, period);
       const upper: number[] = [];
-      const middle = sma;
+      const middle: number[] = [];
       const lower: number[] = [];
 
       for (let i = 0; i < sma.length; i++) {
-        const startIndex = data.length - sma.length + i - period + 1;
-        const endIndex = data.length - sma.length + i + 1;
-        const slice = data.slice(math.max(0, startIndex), endIndex);
+        const startIndex = i;
+        const endIndex = startIndex + period;
+        const slice = data.slice(startIndex, endIndex);
         
-        const std = math.std(slice);
-        const upperBand = sma[i] + (stdDev * std);
-        const lowerBand = sma[i] - (stdDev * std);
+        const std = Number(math.std(slice));
+        const smaValue = sma[i];
         
-        upper.push(upperBand);
-        lower.push(lowerBand);
+        if (smaValue !== undefined) {
+          const upperBand = smaValue + (stdDev * std);
+          const lowerBand = smaValue - (stdDev * std);
+          
+          upper.push(upperBand);
+          middle.push(smaValue);
+          lower.push(lowerBand);
+        }
       }
 
       logger.debug(`Calculated Bollinger Bands`, { 
@@ -374,24 +411,27 @@ export class MathUtilsService {
   }
 
   /**
-   * Calculate correlation coefficient between two arrays
+   * Calculate correlation coefficient
    */
   calculateCorrelation(x: number[], y: number[]): number {
     try {
-      if (x.length !== y.length) {
-        throw new Error('Arrays must have the same length');
+      if (x.length !== y.length || x.length === 0) {
+        throw new Error('Arrays must have same length and be non-empty');
       }
 
       const n = x.length;
-      const sumX = math.sum(x);
-      const sumY = math.sum(y);
-      const sumXY = x.reduce((acc, val, i) => acc + val * y[i], 0);
+      const sumX = x.reduce((acc, val) => acc + val, 0);
+      const sumY = y.reduce((acc, val) => acc + val, 0);
+      const sumXY = x.reduce((acc, val, i) => {
+        const yVal = y[i];
+        return acc + val * (yVal || 0);
+      }, 0);
       const sumX2 = x.reduce((acc, val) => acc + val * val, 0);
       const sumY2 = y.reduce((acc, val) => acc + val * val, 0);
 
       const numerator = n * sumXY - sumX * sumY;
-      const denominator = math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-
+      const denominator = Number(math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY)));
+      
       return denominator !== 0 ? numerator / denominator : 0;
     } catch (error) {
       logger.error('Error calculating correlation', error);
@@ -408,14 +448,17 @@ export class MathUtilsService {
     rSquared: number;
   } {
     try {
-      if (x.length !== y.length) {
-        throw new Error('Arrays must have the same length');
+      if (x.length !== y.length || x.length < 2) {
+        throw new Error('Arrays must have same length and at least 2 points');
       }
 
       const n = x.length;
-      const sumX = math.sum(x);
-      const sumY = math.sum(y);
-      const sumXY = x.reduce((acc, val, i) => acc + val * y[i], 0);
+      const sumX = x.reduce((acc, val) => acc + val, 0);
+      const sumY = y.reduce((acc, val) => acc + val, 0);
+      const sumXY = x.reduce((acc, val, i) => {
+        const yVal = y[i];
+        return acc + val * (yVal || 0);
+      }, 0);
       const sumX2 = x.reduce((acc, val) => acc + val * val, 0);
 
       const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
@@ -424,11 +467,15 @@ export class MathUtilsService {
       // Calculate R-squared
       const yMean = sumY / n;
       const ssRes = y.reduce((acc, val, i) => {
-        const predicted = slope * x[i] + intercept;
-        return acc + math.pow(val - predicted, 2);
+        const xVal = x[i];
+        if (xVal !== undefined) {
+          const predicted = slope * xVal + intercept;
+          return acc + Number(math.pow(val - predicted, 2));
+        }
+        return acc;
       }, 0);
-      const ssTot = y.reduce((acc, val) => acc + math.pow(val - yMean, 2), 0);
-      const rSquared = 1 - (ssRes / ssTot);
+      const ssTot = y.reduce((acc, val) => acc + Number(math.pow(val - yMean, 2)), 0);
+      const rSquared = ssTot !== 0 ? 1 - (ssRes / ssTot) : 0;
 
       logger.debug('Calculated linear regression', { slope, intercept, rSquared });
       return { slope, intercept, rSquared };
@@ -439,21 +486,21 @@ export class MathUtilsService {
   }
 
   /**
-   * Round to specified decimal places
+   * Round a number to specified decimal places
    */
   round(value: number, decimals: number = 2): number {
-    return math.round(value, decimals);
+    return Number(math.round(value, decimals));
   }
 
   /**
-   * Format number as percentage
+   * Format a number as percentage
    */
   formatPercentage(value: number, decimals: number = 2): string {
     return `${this.round(value * 100, decimals)}%`;
   }
 
   /**
-   * Format number as currency
+   * Format a number as currency
    */
   formatCurrency(value: number, currency: string = '₹', decimals: number = 2): string {
     return `${currency}${this.round(value, decimals).toLocaleString()}`;

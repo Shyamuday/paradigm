@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { logger } from '../logger/logger';
 import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { InstrumentsManager } from './instruments-manager.service';
-import { OrderManager } from './order-manager.service';
+import { OrderManagerService } from './order-manager.service';
 import { WebSocketManager } from './websocket-manager.service';
 import { StrategyService } from './strategy.service';
 import { RiskService } from './risk.service';
@@ -50,12 +50,12 @@ export interface TradingStats {
 
 export class AutomatedTradingService extends EventEmitter {
     private auth: ZerodhaAuth;
-    private instrumentsManager: InstrumentsManager;
-    private orderManager: OrderManager;
-    private websocketManager: WebSocketManager;
-    private strategyService: StrategyService;
-    private riskService: RiskService;
-    private portfolioService: PortfolioService;
+    private instrumentsManager!: InstrumentsManager;
+    private orderManager!: OrderManagerService;
+    private websocketManager!: WebSocketManager;
+    private strategyService!: StrategyService;
+    private riskService!: RiskService;
+    private portfolioService!: PortfolioService;
 
     private running: boolean = false;
     private tradingConfig!: TradingConfig;
@@ -69,7 +69,7 @@ export class AutomatedTradingService extends EventEmitter {
         super();
         this.auth = new ZerodhaAuth();
         this.instrumentsManager = new InstrumentsManager(this.auth);
-        this.orderManager = new OrderManager(this.auth, this.instrumentsManager);
+        this.orderManager = new OrderManagerService(this.auth, this.instrumentsManager);
         this.websocketManager = new WebSocketManager(this.auth);
         this.strategyService = new StrategyService();
         this.riskService = new RiskService();
