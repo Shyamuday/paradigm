@@ -2,80 +2,33 @@ import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { logger } from '../logger/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import {
+    ZerodhaInstrumentSchema,
+    MarketQuoteSchema,
+    OHLCQuoteSchema,
+    LTPQuoteSchema,
+    HistoricalDataSchema,
+    InstrumentsResponseSchema,
+    MarketQuotesResponseSchema,
+    OHLCQuotesResponseSchema,
+    LTPQuotesResponseSchema,
+    HistoricalDataResponseSchema,
+    type ZerodhaInstrument,
+    type MarketQuote,
+    type OHLCQuote,
+    type LTPQuote,
+    type HistoricalData
+} from '../schemas/instruments.schema';
+import { z } from 'zod';
 
-export interface ZerodhaInstrument {
-    instrument_token: number;
-    exchange_token: number;
-    tradingsymbol: string;
-    name: string;
-    last_price: number;
-    expiry: string;
-    strike: number;
-    tick_size: number;
-    lot_size: number;
-    instrument_type: string;
-    segment: string;
-    exchange: string;
-}
+// Re-export types for backward compatibility
+export type { ZerodhaInstrument, MarketQuote, OHLCQuote, LTPQuote, HistoricalData } from '../schemas/instruments.schema';
 
+// Market depth interface (not in schema yet)
 export interface MarketDepth {
     price: number;
     quantity: number;
     orders: number;
-}
-
-export interface MarketQuote {
-    instrument_token: number;
-    timestamp: string;
-    last_trade_time: string;
-    last_price: number;
-    last_quantity: number;
-    buy_quantity: number;
-    sell_quantity: number;
-    volume: number;
-    average_price: number;
-    oi: number;
-    oi_day_high: number;
-    oi_day_low: number;
-    net_change: number;
-    lower_circuit_limit: number;
-    upper_circuit_limit: number;
-    ohlc: {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-    };
-    depth: {
-        buy: MarketDepth[];
-        sell: MarketDepth[];
-    };
-}
-
-export interface OHLCQuote {
-    instrument_token: number;
-    last_price: number;
-    ohlc: {
-        open: number;
-        high: number;
-        low: number;
-        close: number;
-    };
-}
-
-export interface LTPQuote {
-    instrument_token: number;
-    last_price: number;
-}
-
-export interface HistoricalData {
-    date: string;
-    open: number;
-    high: number;
-    low: number;
-    close: number;
-    volume: number;
-    oi?: number;
 }
 
 export class InstrumentsManager {
@@ -137,7 +90,7 @@ export class InstrumentsManager {
             logger.info(`📊 Fetching instruments for ${exchange}...`);
 
             const kite = this.auth.getKite();
-            const instrumentsRaw = await kite.getInstruments([exchange]);
+            const instrumentsRaw = await kite.getInstruments(exchange);
 
             const instruments: ZerodhaInstrument[] = this.parseInstrumentsResponse(instrumentsRaw);
 
@@ -463,82 +416,129 @@ export class InstrumentsManager {
     // Private helper methods
 
     private parseInstrumentsResponse(rawInstruments: any[]): ZerodhaInstrument[] {
-        return rawInstruments.map(inst => ({
-            instrument_token: Number(inst.instrument_token) || 0,
-            exchange_token: Number(inst.exchange_token) || 0,
-            tradingsymbol: String(inst.tradingsymbol || ''),
-            name: String(inst.name || ''),
-            last_price: Number(inst.last_price) || 0,
-            expiry: String(inst.expiry || ''),
-            strike: Number(inst.strike) || 0,
-            tick_size: Number(inst.tick_size) || 0,
-            lot_size: Number(inst.lot_size) || 0,
-            instrument_type: String(inst.instrument_type || ''),
-            segment: String(inst.segment || ''),
-            exchange: String(inst.exchange || '')
-        }));
+        try {
+            return rawInstruments.map(inst => {
+                try {
+                    return ZerodhaInstrumentSchema.parse(inst);
+                } catch (error) {
+                    if (error instanceof z.ZodError) {
+                        logger.warn('Invalid instrument data:', error.issues);
+                    }
+                    // Fallback to manual parsing for invalid data
+                    return {
+                        instrument_token: Number(inst.instrument_token) || 0,
+                        exchange_token: Number(inst.exchange_token) || 0,
+                        tradingsymbol: String(inst.tradingsymbol || ''),
+                        name: String(inst.name || ''),
+                        last_price: Number(inst.last_price) || 0,
+                        expiry: String(inst.expiry || ''),
+                        strike: Number(inst.strike) || 0,
+                        tick_size: Number(inst.tick_size) || 0,
+                        lot_size: Number(inst.lot_size) || 0,
+                        instrument_type: String(inst.instrument_type || ''),
+                        segment: String(inst.segment || ''),
+                        exchange: String(inst.exchange || '')
+                    };
+                }
+            });
+        } catch (error) {
+            logger.error('Failed to parse instruments response:', error);
+            throw new Error('Invalid instruments data received from API');
+        }
     }
 
     private parseMarketQuote(data: any): MarketQuote {
-        return {
-            instrument_token: Number(data.instrument_token) || 0,
-            timestamp: String(data.timestamp || ''),
-            last_trade_time: String(data.last_trade_time || ''),
-            last_price: Number(data.last_price) || 0,
-            last_quantity: Number(data.last_quantity) || 0,
-            buy_quantity: Number(data.buy_quantity) || 0,
-            sell_quantity: Number(data.sell_quantity) || 0,
-            volume: Number(data.volume) || 0,
-            average_price: Number(data.average_price) || 0,
-            oi: Number(data.oi) || 0,
-            oi_day_high: Number(data.oi_day_high) || 0,
-            oi_day_low: Number(data.oi_day_low) || 0,
-            net_change: Number(data.net_change) || 0,
-            lower_circuit_limit: Number(data.lower_circuit_limit) || 0,
-            upper_circuit_limit: Number(data.upper_circuit_limit) || 0,
-            ohlc: {
-                open: Number(data.ohlc?.open) || 0,
-                high: Number(data.ohlc?.high) || 0,
-                low: Number(data.ohlc?.low) || 0,
-                close: Number(data.ohlc?.close) || 0
-            },
-            depth: {
-                buy: this.parseMarketDepth(data.depth?.buy),
-                sell: this.parseMarketDepth(data.depth?.sell)
+        try {
+            return MarketQuoteSchema.parse(data);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                logger.warn('Invalid market quote data:', error.issues);
             }
-        };
+            // Fallback to manual parsing for invalid data
+            return {
+                instrument_token: Number(data.instrument_token) || 0,
+                timestamp: String(data.timestamp || ''),
+                last_trade_time: String(data.last_trade_time || ''),
+                last_price: Number(data.last_price) || 0,
+                last_quantity: Number(data.last_quantity) || 0,
+                buy_quantity: Number(data.buy_quantity) || 0,
+                sell_quantity: Number(data.sell_quantity) || 0,
+                volume: Number(data.volume) || 0,
+                average_price: Number(data.average_price) || 0,
+                oi: Number(data.oi) || 0,
+                oi_day_high: Number(data.oi_day_high) || 0,
+                oi_day_low: Number(data.oi_day_low) || 0,
+                net_change: Number(data.net_change) || 0,
+                lower_circuit_limit: Number(data.lower_circuit_limit) || 0,
+                upper_circuit_limit: Number(data.upper_circuit_limit) || 0,
+                ohlc: {
+                    open: Number(data.ohlc?.open) || 0,
+                    high: Number(data.ohlc?.high) || 0,
+                    low: Number(data.ohlc?.low) || 0,
+                    close: Number(data.ohlc?.close) || 0
+                },
+                depth: {
+                    buy: this.parseMarketDepth(data.depth?.buy),
+                    sell: this.parseMarketDepth(data.depth?.sell)
+                }
+            };
+        }
     }
 
     private parseOHLCQuote(data: any): OHLCQuote {
-        return {
-            instrument_token: Number(data.instrument_token) || 0,
-            last_price: Number(data.last_price) || 0,
-            ohlc: {
-                open: Number(data.ohlc?.open) || 0,
-                high: Number(data.ohlc?.high) || 0,
-                low: Number(data.ohlc?.low) || 0,
-                close: Number(data.ohlc?.close) || 0
+        try {
+            return OHLCQuoteSchema.parse(data);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                logger.warn('Invalid OHLC quote data:', error.issues);
             }
-        };
+            // Fallback to manual parsing for invalid data
+            return {
+                instrument_token: Number(data.instrument_token) || 0,
+                last_price: Number(data.last_price) || 0,
+                ohlc: {
+                    open: Number(data.ohlc?.open) || 0,
+                    high: Number(data.ohlc?.high) || 0,
+                    low: Number(data.ohlc?.low) || 0,
+                    close: Number(data.ohlc?.close) || 0
+                }
+            };
+        }
     }
 
     private parseLTPQuote(data: any): LTPQuote {
-        return {
-            instrument_token: Number(data.instrument_token) || 0,
-            last_price: Number(data.last_price) || 0
-        };
+        try {
+            return LTPQuoteSchema.parse(data);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                logger.warn('Invalid LTP quote data:', error.issues);
+            }
+            // Fallback to manual parsing for invalid data
+            return {
+                instrument_token: Number(data.instrument_token) || 0,
+                last_price: Number(data.last_price) || 0
+            };
+        }
     }
 
     private parseHistoricalCandle(candle: any): HistoricalData {
-        return {
-            date: candle.date instanceof Date ? candle.date.toISOString() : String(candle.date),
-            open: Number(candle.open) || 0,
-            high: Number(candle.high) || 0,
-            low: Number(candle.low) || 0,
-            close: Number(candle.close) || 0,
-            volume: Number(candle.volume) || 0,
-            ...(candle.oi !== undefined ? { oi: Number(candle.oi) || 0 } : {})
-        };
+        try {
+            return HistoricalDataSchema.parse(candle);
+        } catch (error) {
+            if (error instanceof z.ZodError) {
+                logger.warn('Invalid historical candle data:', error.issues);
+            }
+            // Fallback to manual parsing for invalid data
+            return {
+                date: candle.date instanceof Date ? candle.date.toISOString() : String(candle.date),
+                open: Number(candle.open) || 0,
+                high: Number(candle.high) || 0,
+                low: Number(candle.low) || 0,
+                close: Number(candle.close) || 0,
+                volume: Number(candle.volume) || 0,
+                ...(candle.oi !== undefined ? { oi: Number(candle.oi) || 0 } : {})
+            };
+        }
     }
 
     private parseMarketDepth(depthData: any[]): MarketDepth[] {
