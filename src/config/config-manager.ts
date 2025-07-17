@@ -1,37 +1,52 @@
 import * as YAML from 'yamljs';
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-import { logger } from '../logger/logger';
-import { BotConfig } from '../types';
+import { logger, initializeLogger } from '../logger/logger';
+import { BotConfig, BotConfigSchema } from './config.schema';
+import { z } from 'zod';
+import { merge } from 'lodash';
 
 export class ConfigManager {
-  private config: BotConfig;
-  private configPath: string;
+  private config!: BotConfig;
+  private readonly configPath: string;
+  private isWatching = false;
 
   constructor() {
     this.configPath = path.join(process.cwd(), 'config', 'trading-config.yaml');
-    this.config = this.getDefaultConfig();
   }
 
   async loadConfig(): Promise<void> {
     try {
       logger.info('Loading configuration...');
-      
-      // Load YAML config file
-      if (fs.existsSync(this.configPath)) {
-        const yamlConfig = YAML.load(this.configPath);
-        this.config = this.mergeConfig(this.config, yamlConfig);
+      const defaultConfig = this.getDefaultConfig();
+      let finalConfig: any = defaultConfig;
+
+      try {
+        const yamlContent = await fs.readFile(this.configPath, 'utf8');
+        const yamlConfig = YAML.parse(yamlContent);
+        finalConfig = merge({}, defaultConfig, yamlConfig);
         logger.info('Configuration loaded from YAML file');
-      } else {
-        logger.warn('YAML config file not found, using default configuration');
+      } catch (error: any) {
+        if (error.code === 'ENOENT') {
+          logger.warn('YAML config file not found, using default configuration');
+        } else {
+          throw error;
+        }
       }
 
-      // Override with environment variables
-      this.config = this.overrideWithEnvVars(this.config);
-      
-      logger.info('Configuration loaded successfully');
-      
-    } catch (error) {
+      finalConfig = this.overrideWithEnvVars(finalConfig);
+
+      this.config = this.validateConfig(finalConfig);
+
+      await initializeLogger(this.config.logging);
+
+      logger.info('Configuration loaded and validated successfully');
+
+      if (!this.isWatching && process.env.NODE_ENV !== 'test') {
+        this.watchConfig();
+        this.isWatching = true;
+      }
+    } catch (error: any) {
       logger.error('Failed to load configuration:', error);
       throw error;
     }
@@ -41,8 +56,30 @@ export class ConfigManager {
     return this.config;
   }
 
-  updateConfig(updates: Partial<BotConfig>): void {
-    this.config = { ...this.config, ...updates };
+  private validateConfig(config: any): BotConfig {
+    try {
+      return BotConfigSchema.parse(config);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        logger.error('Configuration validation failed:', error.issues);
+        throw error;
+      }
+      throw error;
+    }
+  }
+
+  private async watchConfig(): Promise<void> {
+    try {
+      const watcher = fs.watch(this.configPath);
+      for await (const event of watcher) {
+        if (event.eventType === 'change') {
+          logger.info('Configuration file changed. Reloading...');
+          await this.loadConfig();
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to watch config file:', error);
+    }
   }
 
   private getDefaultConfig(): BotConfig {
@@ -87,8 +124,8 @@ export class ConfigManager {
         postMarketEnd: '15:45'
       },
       strategies: {
-        simple_ma: {
-          name: 'simple_ma',
+        moving_average: {
+          name: 'moving_average',
           enabled: true,
           description: 'Simple Moving Average Crossover',
           parameters: {
@@ -97,6 +134,18 @@ export class ConfigManager {
           },
           capitalAllocation: 0.3,
           instruments: ['NIFTY', 'BANKNIFTY']
+        },
+        rsi: {
+          name: 'rsi',
+          enabled: false,
+          description: 'Relative Strength Index Strategy',
+          parameters: {
+            period: 14,
+            overbought: 70,
+            oversold: 30
+          },
+          capitalAllocation: 0.2,
+          instruments: ['RELIANCE']
         }
       },
       logging: {
@@ -119,10 +168,7 @@ export class ConfigManager {
   }
 
   private mergeConfig(defaultConfig: BotConfig, yamlConfig: any): BotConfig {
-    return {
-      ...defaultConfig,
-      ...yamlConfig
-    };
+    return merge({}, defaultConfig, yamlConfig);
   }
 
   private overrideWithEnvVars(config: BotConfig): BotConfig {
@@ -232,4 +278,4 @@ export class ConfigManager {
       requestToken: process.env.ZERODHA_REQUEST_TOKEN || ''
     };
   }
-} 
+}

@@ -1,76 +1,63 @@
-import { BaseStrategy } from '../strategy-engine.service';
-import {
-    StrategyConfig,
-    TradeSignal,
-    MarketData,
-    Position,
-    StrategyType
-} from '../../types';
+import { IStrategy, MarketData, TradeSignal } from './strategy.interface';
+import { logger } from '../../logger/logger';
 
-export class RSIStrategy extends BaseStrategy {
-    constructor() {
-        super(
-            'RSI Mean Reversion',
-            'MEAN_REVERSION',
-            '1.0.0',
-            'RSI-based mean reversion strategy for oversold/overbought conditions'
-        );
+interface RsiConfig {
+    period: number;
+    overbought: number;
+    oversold: number;
+}
+
+export class RsiStrategy implements IStrategy {
+    public name = 'rsi';
+    public description = 'A Relative Strength Index (RSI) based strategy.';
+    private config!: RsiConfig;
+
+    async initialize(config: any): Promise<void> {
+        if (!config.period || !config.overbought || !config.oversold) {
+            throw new Error('Missing required configuration for RsiStrategy.');
+        }
+        this.config = config;
+        logger.info('RsiStrategy initialized with config:', this.config);
     }
 
     async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
         const signals: TradeSignal[] = [];
-
-        if (marketData.length < 30) {
-            return signals; // Need enough data for RSI calculation
+        if (marketData.length < this.config.period) {
+            return signals;
         }
 
-        const period = this.config.parameters.period || 14;
-        const oversoldThreshold = this.config.parameters.oversoldThreshold || 30;
-        const overboughtThreshold = this.config.parameters.overboughtThreshold || 70;
-        const volumeThreshold = this.config.parameters.volumeThreshold;
+        const rsiValues = this.calculateRSI(marketData, this.config.period);
 
-        // Calculate RSI
-        const rsiValues = this.calculateRSIArray(marketData, period);
-
-        // Look for oversold/overbought conditions
-        for (let i = 1; i < marketData.length; i++) {
+        for (let i = this.config.period; i < marketData.length; i++) {
             const currentData = marketData[i];
-            const prevData = marketData[i - 1];
+            if (!currentData) continue;
 
-            if (!currentData || !prevData) continue;
+            const currentRsi = rsiValues[i];
+            const prevRsi = rsiValues[i - 1];
 
-            const currentRSI = rsiValues[i];
-            const prevRSI = rsiValues[i - 1];
-
-            if (currentRSI === null || prevRSI === null || currentRSI === undefined || prevRSI === undefined) continue;
-
-            // Check volume threshold
-            if (volumeThreshold && (!currentData.volume || currentData.volume < volumeThreshold)) {
-                continue;
-            }
-
-            let action: 'BUY' | 'SELL' | 'HOLD' = 'HOLD';
-
-            // Oversold condition (RSI crosses above oversold threshold)
-            if (prevRSI <= oversoldThreshold && currentRSI > oversoldThreshold) {
-                action = 'BUY';
-            }
-            // Overbought condition (RSI crosses below overbought threshold)
-            else if (prevRSI >= overboughtThreshold && currentRSI < overboughtThreshold) {
-                action = 'SELL';
-            }
-
-            if (action !== 'HOLD') {
-                const signal = this.createSignal(currentData, action, {
-                    rsi: currentRSI,
-                    period,
-                    oversoldThreshold,
-                    overboughtThreshold,
-                    condition: action === 'BUY' ? 'oversold' : 'overbought'
-                });
-
-                if (signal) {
-                    signals.push(signal);
+            if (currentRsi !== null && prevRsi !== null) {
+                if (prevRsi! <= this.config.oversold && currentRsi! > this.config.oversold) {
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'BUY',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+                        metadata: {
+                            rsi: currentRsi,
+                        },
+                    });
+                } else if (prevRsi! >= this.config.overbought && currentRsi! < this.config.overbought) {
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'SELL',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+                        metadata: {
+                            rsi: currentRsi,
+                        },
+                    });
                 }
             }
         }
@@ -78,50 +65,31 @@ export class RSIStrategy extends BaseStrategy {
         return signals;
     }
 
-    async shouldExit(position: Position, marketData: MarketData[]): Promise<boolean> {
-        if (marketData.length < 20) return false;
-
-        const period = this.config.parameters.period || 14;
-        const oversoldThreshold = this.config.parameters.oversoldThreshold || 30;
-        const overboughtThreshold = this.config.parameters.overboughtThreshold || 70;
-
-        const rsiValues = this.calculateRSIArray(marketData, period);
-        const currentRSI = rsiValues[rsiValues.length - 1];
-
-        if (currentRSI === null || currentRSI === undefined) return false;
-
-        // Exit long position if RSI becomes overbought
-        if (position.side === 'LONG' && currentRSI >= overboughtThreshold) {
-            return true;
+    private calculateRSI(data: MarketData[], period: number): (number | null)[] {
+        const rsi: (number | null)[] = [];
+        for (let i = 0; i < data.length; i++) {
+            rsi.push(null);
         }
-
-        // Exit short position if RSI becomes oversold
-        if (position.side === 'SHORT' && currentRSI <= oversoldThreshold) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private calculateRSIArray(data: MarketData[], period: number): (number | null)[] {
-        const rsi: (number | null)[] = new Array(data.length).fill(null);
-
-        if (data.length < period + 1) return rsi;
 
         let gains = 0;
         let losses = 0;
 
-        // Calculate initial average gains and losses
+        // Calculate initial average gain and loss
         for (let i = 1; i <= period; i++) {
-            const change = (data[i]?.close || data[i]?.ltp || 0) - (data[i - 1]?.close || data[i - 1]?.ltp || 0);
-            if (change > 0) gains += change;
-            else losses -= change;
+            const current = data[i];
+            const previous = data[i - 1];
+            if (!current || !previous) continue;
+            const change = current.close - previous.close;
+            if (change > 0) {
+                gains += change;
+            } else {
+                losses -= change;
+            }
         }
 
         let avgGain = gains / period;
         let avgLoss = losses / period;
 
-        // Calculate first RSI
         if (avgLoss === 0) {
             rsi[period] = 100;
         } else {
@@ -129,17 +97,21 @@ export class RSIStrategy extends BaseStrategy {
             rsi[period] = 100 - (100 / (1 + rs));
         }
 
-        // Calculate RSI for remaining points using smoothing
+        // Calculate subsequent RSI values
         for (let i = period + 1; i < data.length; i++) {
-            const change = (data[i]?.close || data[i]?.ltp || 0) - (data[i - 1]?.close || data[i - 1]?.ltp || 0);
-
+            const current = data[i];
+            const previous = data[i - 1];
+            if (!current || !previous) continue;
+            const change = current.close - previous.close;
             let currentGain = 0;
             let currentLoss = 0;
 
-            if (change > 0) currentGain = change;
-            else currentLoss = -change;
+            if (change > 0) {
+                currentGain = change;
+            } else {
+                currentLoss = -change;
+            }
 
-            // Smooth the averages
             avgGain = (avgGain * (period - 1) + currentGain) / period;
             avgLoss = (avgLoss * (period - 1) + currentLoss) / period;
 
@@ -153,54 +125,4 @@ export class RSIStrategy extends BaseStrategy {
 
         return rsi;
     }
-
-    private createSignal(
-        data: MarketData,
-        action: 'BUY' | 'SELL',
-        metadata: any
-    ): TradeSignal | null {
-        const price = data.close || data.ltp;
-        if (!price || !data.symbol) return null;
-
-        return {
-            id: `signal_${Date.now()}_${Math.random()}`,
-            strategy: this.name,
-            symbol: data.symbol,
-            action,
-            quantity: 1, // Will be calculated by position sizing
-            price,
-            timestamp: new Date(data.timestamp),
-            metadata: {
-                ...metadata,
-                strategyType: this.type,
-                version: this.version
-            }
-        };
-    }
-
-    validateConfig(config: StrategyConfig): boolean {
-        const baseValid = super.validateConfig(config);
-        if (!baseValid) return false;
-
-        // Validate RSI strategy specific parameters
-        const { period, oversoldThreshold, overboughtThreshold } = config.parameters;
-
-        if (!period || period < 1) {
-            return false;
-        }
-
-        if (!oversoldThreshold || oversoldThreshold < 0 || oversoldThreshold > 100) {
-            return false;
-        }
-
-        if (!overboughtThreshold || overboughtThreshold < 0 || overboughtThreshold > 100) {
-            return false;
-        }
-
-        if (oversoldThreshold >= overboughtThreshold) {
-            return false;
-        }
-
-        return true;
-    }
-} 
+}
