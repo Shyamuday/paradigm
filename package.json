@@ -38,7 +38,9 @@
         "circuit:demo": "ts-node src/examples/circuit-breaker-integration.ts",
         "circuit:test": "jest src/__tests__/circuit-breaker.test.ts",
         "security:demo": "ts-node src/examples/security-validation-integration.ts",
-        "security:test": "jest src/__tests__/security-validator.test.ts"
+        "security:test": "jest src/__tests__/security-validator.test.ts",
+        "db:optimize:demo": "ts-node src/examples/database-optimization-integration.ts",
+        "db:optimize:test": "jest src/__tests__/database-optimization.test.ts"
     },
     "keywords": [
         "trading",
