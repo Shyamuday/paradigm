@@ -3,6 +3,22 @@ export { ConfigManager } from './config/config-manager';
 export { DatabaseService } from './database/database';
 export { logger } from './logger/logger';
 
+// Error handling
+export { 
+  errorHandler, 
+  ErrorHandler, 
+  TradingError, 
+  ErrorCategory, 
+  ErrorSeverity,
+  createAuthenticationError,
+  createRateLimitError,
+  createNetworkError,
+  createDatabaseError,
+  createValidationError,
+  createTradingError
+} from './utils/error-handler';
+export { errorMiddleware } from './middleware/error-handler';
+
 // Authentication
 export { ZerodhaAuth } from './auth/zerodha-auth';
 

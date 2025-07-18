@@ -32,7 +32,9 @@
         "trading:live": "ts-node src/examples/live-data-integration-example.ts",
         "dashboard": "ts-node src/ui/run-dashboard.ts",
         "auth:example": "ts-node src/examples/auth-example.ts",
-        "webhook:start": "ts-node src/webhooks/start-webhook.ts"
+        "webhook:start": "ts-node src/webhooks/start-webhook.ts",
+        "error:demo": "ts-node src/examples/error-handler-integration.ts",
+        "error:test": "jest src/__tests__/error-handler.test.ts"
     },
     "keywords": [
         "trading",
