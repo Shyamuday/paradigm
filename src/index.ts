@@ -43,6 +43,32 @@ export {
   createAnalyticsServiceCircuitBreaker
 } from './middleware/circuit-breaker';
 
+// Security validation
+export {
+  SecurityValidator,
+  SecurityLevel,
+  ValidationType,
+  securityValidator,
+  validateTradingInput,
+  validateOrderInput,
+  validateUserInput,
+  validatePassword,
+  hashPassword,
+  generateSecureToken,
+  generateApiKey
+} from './utils/security-validator';
+export {
+  securityMiddleware,
+  inputValidationMiddleware,
+  authenticationMiddleware,
+  rateLimitMiddleware,
+  securityHeadersMiddleware,
+  auditLogMiddleware,
+  tradingValidationMiddleware,
+  userRegistrationMiddleware,
+  securityMonitoringMiddleware
+} from './middleware/security-validation';
+
 // Authentication
 export { ZerodhaAuth } from './auth/zerodha-auth';
 

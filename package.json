@@ -36,7 +36,9 @@
         "error:demo": "ts-node src/examples/error-handler-integration.ts",
         "error:test": "jest src/__tests__/error-handler.test.ts",
         "circuit:demo": "ts-node src/examples/circuit-breaker-integration.ts",
-        "circuit:test": "jest src/__tests__/circuit-breaker.test.ts"
+        "circuit:test": "jest src/__tests__/circuit-breaker.test.ts",
+        "security:demo": "ts-node src/examples/security-validation-integration.ts",
+        "security:test": "jest src/__tests__/security-validator.test.ts"
     },
     "keywords": [
         "trading",
