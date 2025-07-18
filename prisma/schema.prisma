@@ -44,7 +44,18 @@ model TradingSession {
   endTime     DateTime?
   mode        String   // paper, live, backtest
   capital     Float
-  status      String   // active, completed, stopped
+  status      String   // active, completed, stopped, paused
+  
+  // Session metrics
+  initialCapital Float
+  currentCapital Float?
+  totalPnL      Float   @default(0)
+  realizedPnL   Float   @default(0)
+  unrealizedPnL Float   @default(0)
+  
+  // Risk metrics
+  maxDrawdown  Float   @default(0)
+  peakCapital  Float?
   
   // Related data
   trades      Trade[]
@@ -52,6 +63,8 @@ model TradingSession {
   riskMetrics RiskMetrics[]
   optionsPositions OptionsPosition[] // Added relation
   
+  @@index([userId, status])
+  @@index([startTime])
   @@map("trading_sessions")
 }
 
@@ -414,10 +427,12 @@ model Trade {
   // Trade details
   action       String   // BUY, SELL
   quantity     Int
-  price        Float
+  price        Float    // Order price
+  executionPrice Float? // Actual execution price
+  filledQuantity Int    @default(0) // Quantity actually filled
   orderType    String   // MARKET, LIMIT, SL, SL-M
   orderId      String?  // Zerodha order ID
-  status       String   // PENDING, COMPLETE, CANCELLED, REJECTED
+  status       String   // PENDING, COMPLETE, CANCELLED, REJECTED, PARTIALLY_FILLED
   
   // Risk management
   stopLoss     Float?
@@ -437,6 +452,8 @@ model Trade {
   transactionCost TransactionCost?
   tradingFees  TradingFees[]
   
+  @@index([sessionId, status])
+  @@index([instrumentId, orderTime])
   @@map("trades")
 }
 
@@ -454,16 +471,29 @@ model Position {
   quantity     Int
   averagePrice Float
   currentPrice Float?
+  side         String   // LONG, SHORT
+  
+  // Risk management
+  stopLoss     Float?
+  target       Float?
+  trailingStop Boolean  @default(false)
+  trailingStopPrice Float?
   
   // P&L tracking
   unrealizedPnL Float?
   realizedPnL   Float?
   
+  // Position status
+  isOpen       Boolean  @default(true)
+  
   // Timestamps
+  openTime     DateTime @default(now())
+  closeTime    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   
   @@index([sessionId, instrumentId])
+  @@index([sessionId, isOpen])
   @@map("positions")
 }
 

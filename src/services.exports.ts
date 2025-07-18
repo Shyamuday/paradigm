@@ -14,7 +14,7 @@ export { StrategyEngineService } from './services/strategy-engine.service';
 export { StrategyFactory } from './services/strategy-factory.service';
 export { AutomatedTradingService } from './services/automated-trading.service';
 export { EnhancedBacktestService } from './services/enhanced-backtest.service';
-export { advancedTradingEngine, defaultEngineConfig } from './services/advanced-trading-engine.service';
+export { advancedTradingEngine } from './services/advanced-trading-engine.service';
 export { MovingAverageStrategy } from './services/strategies/moving-average-strategy';
 export { RsiStrategy } from './services/strategies/rsi-strategy';
 export { BreakoutStrategy } from './services/strategies/breakout-strategy';

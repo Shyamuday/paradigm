@@ -24,7 +24,7 @@ export {
   userRegistrationMiddleware,
   securityMonitoringMiddleware
 } from './middleware/security-validation';
-export { rateLimiter } from './middleware/rate-limiter';
+export { rateLimiters } from './middleware/rate-limiter';
 export {
   MultiLevelCacheMiddleware,
   CacheMiddlewareConfig,
