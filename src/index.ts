@@ -135,4 +135,21 @@ export { enhancedTradingExample } from './examples/enhanced-trading-example';
 
 // Database setup
 export { setupDatabase } from './database/setup';
-export { mockData } from './database/mock-data'; 
+export { mockData } from './database/mock-data';
+
+// Database optimization
+export {
+  DatabaseOptimizationService,
+  IndexConfig,
+  QueryMetrics,
+  OptimizationRecommendation,
+  DatabaseStats
+} from './services/database-optimization.service';
+export {
+  DatabaseOptimizationMiddleware,
+  DatabaseOptimizationMiddlewareConfig
+} from './middleware/database-optimization';
+export {
+  DatabaseOptimizationExample,
+  runDatabaseOptimizationExample
+} from './examples/database-optimization-integration'; 
