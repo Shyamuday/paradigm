@@ -34,7 +34,9 @@
         "auth:example": "ts-node src/examples/auth-example.ts",
         "webhook:start": "ts-node src/webhooks/start-webhook.ts",
         "error:demo": "ts-node src/examples/error-handler-integration.ts",
-        "error:test": "jest src/__tests__/error-handler.test.ts"
+        "error:test": "jest src/__tests__/error-handler.test.ts",
+        "circuit:demo": "ts-node src/examples/circuit-breaker-integration.ts",
+        "circuit:test": "jest src/__tests__/circuit-breaker.test.ts"
     },
     "keywords": [
         "trading",

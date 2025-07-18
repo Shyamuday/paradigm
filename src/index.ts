@@ -19,6 +19,30 @@ export {
 } from './utils/error-handler';
 export { errorMiddleware } from './middleware/error-handler';
 
+// Circuit breakers
+export {
+  CircuitBreaker,
+  CircuitBreakerManager,
+  CircuitState,
+  circuitBreakerManager,
+  createApiCircuitBreaker,
+  createDatabaseCircuitBreaker,
+  createExternalServiceCircuitBreaker
+} from './utils/circuit-breaker';
+export {
+  circuitBreakerMiddleware,
+  circuitBreakerHealthMiddleware,
+  circuitBreakerStatsMiddleware,
+  circuitBreakerControlMiddleware,
+  circuitBreakerMonitoringMiddleware,
+  createZerodhaApiCircuitBreaker,
+  createMarketDataApiCircuitBreaker,
+  createPostgresCircuitBreaker,
+  createRedisCircuitBreaker,
+  createNotificationServiceCircuitBreaker,
+  createAnalyticsServiceCircuitBreaker
+} from './middleware/circuit-breaker';
+
 // Authentication
 export { ZerodhaAuth } from './auth/zerodha-auth';
 
