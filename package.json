@@ -42,7 +42,9 @@
         "db:optimize:demo": "ts-node src/examples/database-optimization-integration.ts",
         "db:optimize:test": "jest src/__tests__/database-optimization.test.ts",
         "cache:demo": "ts-node src/examples/multi-level-cache-integration.ts",
-        "cache:test": "jest src/__tests__/multi-level-cache.test.ts"
+        "cache:test": "jest src/__tests__/multi-level-cache.test.ts",
+        "release": "standard-version",
+        "changelog": "standard-version --dry-run --skip.commit --skip.tag"
     },
     "keywords": [
         "trading",
@@ -102,6 +104,7 @@
         "jest": "^29.7.0",
         "postman-collection-generator": "^0.0.1",
         "prisma": "^5.6.0",
+        "standard-version": "^9.5.0",
         "ts-jest": "^29.4.0",
         "ts-node": "^10.9.1",
         "ts-node-dev": "^2.0.0",
