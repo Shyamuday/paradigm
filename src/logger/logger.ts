@@ -223,6 +223,11 @@ export const logger = {
   errorWithContext: (message: string, context: any, error?: Error) => defaultLogger.errorWithContext(message, context, error)
 };
 
+// Export initializeLogger function
+export const initializeLogger = (config?: EnhancedLoggingConfig): LoggerManager => {
+  return new LoggerManager(config);
+};
+
 // Export the logger manager for advanced usage
 export { LoggerManager };
 export default defaultLogger; 

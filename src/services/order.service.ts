@@ -1,34 +1,40 @@
-import { db } from '../database/database';
+import { PrismaClient } from '@prisma/client';
 import { logger } from '../logger/logger';
 import { TradeOrder, TradeSignal, OrderResult } from '../types';
+
+const prisma = new PrismaClient();
 
 export class OrderService {
     async createTrade(sessionId: string, signal: TradeSignal, strategyId?: string) {
         try {
             // Get instrument
-            const instrument = await db.findUnique('Instrument', { symbol: signal.symbol });
+            const instrument = await prisma.instrument.findUnique({
+                where: { symbol: signal.symbol }
+            });
 
             if (!instrument) {
                 throw new Error(`Instrument not found: ${signal.symbol}`);
             }
 
-            const trade = await db.create('Trade', {
-                id: `trade_${Date.now()}`,
-                sessionId,
-                instrumentId: instrument.id,
-                strategyId: strategyId || null,
-                action: signal.action,
-                quantity: signal.quantity,
-                price: signal.price,
-                orderType: 'MARKET', // Default to market order
-                status: 'PENDING',
-                stopLoss: signal.stopLoss || null,
-                target: signal.target || null,
-                trailingStop: false,
-                orderTime: new Date(),
-                executionTime: null,
-                realizedPnL: null,
-                unrealizedPnL: null
+            const trade = await prisma.trade.create({
+                data: {
+                    id: `trade_${Date.now()}`,
+                    sessionId,
+                    instrumentId: instrument.id,
+                    strategyId: strategyId || null,
+                    action: signal.action,
+                    quantity: signal.quantity,
+                    price: signal.price,
+                    orderType: 'MARKET', // Default to market order
+                    status: 'PENDING',
+                    stopLoss: signal.stopLoss || null,
+                    target: signal.target || null,
+                    trailingStop: false,
+                    orderTime: new Date(),
+                    executionTime: null,
+                    realizedPnL: null,
+                    unrealizedPnL: null
+                }
             });
 
             logger.info('Trade created:', trade.id);
@@ -45,10 +51,16 @@ export class OrderService {
                 status,
                 orderId: orderId || null,
                 executionTime: status === 'COMPLETE' ? new Date() : null,
-                realizedPnL: executionPrice ? await this.calculateRealizedPnL(tradeId, executionPrice) : null,
             };
 
-            const trade = await db.update('Trade', { id: tradeId }, updateData);
+            if (executionPrice) {
+                updateData.realizedPnL = await this.calculateRealizedPnL(tradeId, executionPrice);
+            }
+
+            const trade = await prisma.trade.update({
+                where: { id: tradeId },
+                data: updateData
+            });
 
             logger.info('Trade status updated:', trade.id, status);
             return trade;
@@ -60,7 +72,9 @@ export class OrderService {
 
     async getTrade(tradeId: string) {
         try {
-            const trade = await db.findUnique('Trade', { id: tradeId });
+            const trade = await prisma.trade.findUnique({
+                where: { id: tradeId }
+            });
             return trade;
         } catch (error) {
             logger.error('Failed to get trade:', error);
@@ -70,7 +84,7 @@ export class OrderService {
 
     async getTradesBySession(sessionId: string) {
         try {
-            const trades = await db.findMany('Trade', {
+            const trades = await prisma.trade.findMany({
                 where: { sessionId },
                 orderBy: { orderTime: 'desc' }
             });
@@ -83,7 +97,7 @@ export class OrderService {
 
     async getTradesByStrategy(strategyId: string) {
         try {
-            const trades = await db.findMany('Trade', {
+            const trades = await prisma.trade.findMany({
                 where: { strategyId },
                 orderBy: { orderTime: 'desc' }
             });
@@ -96,7 +110,7 @@ export class OrderService {
 
     async getPendingTrades(sessionId: string) {
         try {
-            const trades = await db.findMany('Trade', {
+            const trades = await prisma.trade.findMany({
                 where: {
                     sessionId,
                     status: 'PENDING',
@@ -120,28 +134,32 @@ export class OrderService {
     }) {
         try {
             // Get instrument
-            const instrument = await db.findUnique('Instrument', { symbol: positionData.symbol });
+            const instrument = await prisma.instrument.findUnique({
+                where: { symbol: positionData.symbol }
+            });
 
             if (!instrument) {
                 throw new Error(`Instrument not found: ${positionData.symbol}`);
             }
 
-            const position = await db.create('Position', {
-                id: `position_${Date.now()}`,
-                sessionId,
-                instrumentId: instrument.id,
-                tradeId,
-                quantity: positionData.quantity,
-                averagePrice: positionData.averagePrice,
-                currentPrice: positionData.averagePrice, // Initialize with average price
-                side: positionData.side,
-                stopLoss: positionData.stopLoss || null,
-                target: positionData.target || null,
-                trailingStop: false,
-                openTime: new Date(),
-                closeTime: null,
-                unrealizedPnL: null,
-                realizedPnL: null
+            const position = await prisma.position.create({
+                data: {
+                    id: `position_${Date.now()}`,
+                    sessionId,
+                    instrumentId: instrument.id,
+                    tradeId,
+                    quantity: positionData.quantity,
+                    averagePrice: positionData.averagePrice,
+                    currentPrice: positionData.averagePrice, // Initialize with average price
+                    side: positionData.side,
+                    stopLoss: positionData.stopLoss || null,
+                    target: positionData.target || null,
+                    trailingStop: false,
+                    openTime: new Date(),
+                    closeTime: null,
+                    unrealizedPnL: null,
+                    realizedPnL: null
+                }
             });
 
             logger.info('Position created:', position.id);
@@ -170,7 +188,10 @@ export class OrderService {
             if (updates.unrealizedPnL !== undefined) updateData.unrealizedPnL = updates.unrealizedPnL;
             if (updates.realizedPnL !== undefined) updateData.realizedPnL = updates.realizedPnL;
 
-            const position = await db.update('Position', { id: positionId }, updateData);
+            const position = await prisma.position.update({
+                where: { id: positionId },
+                data: updateData
+            });
 
             logger.info('Position updated:', position.id);
             return position;
@@ -182,11 +203,14 @@ export class OrderService {
 
     async closePosition(positionId: string, closePrice: number) {
         try {
-            const position = await db.update('Position', { id: positionId }, {
-                currentPrice: closePrice,
-                closeTime: new Date(),
-                realizedPnL: await this.calculatePositionPnL(positionId, closePrice),
-                unrealizedPnL: 0,
+            const position = await prisma.position.update({
+                where: { id: positionId },
+                data: {
+                    currentPrice: closePrice,
+                    closeTime: new Date(),
+                    realizedPnL: await this.calculatePositionPnL(positionId, closePrice),
+                    unrealizedPnL: 0,
+                }
             });
 
             logger.info('Position closed:', position.id);
@@ -199,7 +223,7 @@ export class OrderService {
 
     async getPositions(sessionId: string) {
         try {
-            const positions = await db.findMany('Position', {
+            const positions = await prisma.position.findMany({
                 where: { sessionId },
                 orderBy: { openTime: 'desc' }
             });
@@ -212,7 +236,7 @@ export class OrderService {
 
     async getOpenPositions(sessionId: string) {
         try {
-            const positions = await db.findMany('Position', {
+            const positions = await prisma.position.findMany({
                 where: {
                     sessionId,
                     closeTime: null,
@@ -228,7 +252,9 @@ export class OrderService {
 
     private async calculateRealizedPnL(tradeId: string, executionPrice: number): Promise<number> {
         try {
-            const trade = await db.findUnique('Trade', { id: tradeId });
+            const trade = await prisma.trade.findUnique({
+                where: { id: tradeId }
+            });
 
             if (!trade) {
                 logger.error('Trade not found for P&L calculation:', tradeId);
@@ -236,7 +262,7 @@ export class OrderService {
             }
 
             // Get related positions
-            const positions = await db.findMany('Position', {
+            const positions = await prisma.position.findMany({
                 where: { tradeId }
             });
 
@@ -250,47 +276,55 @@ export class OrderService {
             // For an opening trade, P&L is 0 as position is just being established
             return 0;
         } catch (error) {
-            logger.error('Error calculating realized P&L:', error);
+            logger.error('Failed to calculate realized P&L:', error);
             return 0;
         }
     }
 
     private async calculatePositionPnL(positionId: string, closePrice: number): Promise<number> {
         try {
-            const position = await db.findUnique('Position', { id: positionId });
+            const position = await prisma.position.findUnique({
+                where: { id: positionId }
+            });
 
-            if (!position || !position.averagePrice || !position.quantity) {
+            if (!position) {
+                logger.error('Position not found for P&L calculation:', positionId);
                 return 0;
             }
 
-            const priceDiff = position.side === 'LONG'
-                ? closePrice - position.averagePrice
-                : position.averagePrice - closePrice;
-
-            return priceDiff * position.quantity;
+            const priceDiff = closePrice - position.averagePrice;
+            const pnl = position.side === 'LONG' ? priceDiff : -priceDiff;
+            return pnl * position.quantity;
         } catch (error) {
-            logger.error('Error calculating position P&L:', error);
+            logger.error('Failed to calculate position P&L:', error);
             return 0;
         }
     }
 
     async updatePositionPnL(positionId: string, currentPrice: number) {
         try {
-            const position = await db.findUnique('Position', { id: positionId });
-
-            if (!position) {
-                logger.error('Position not found for P&L update:', positionId);
-                return;
-            }
-
-            const unrealizedPnL = await this.calculatePositionPnL(position.id, currentPrice);
-
-            await db.update('Position', { id: positionId }, {
-                currentPrice,
-                unrealizedPnL,
+            const position = await prisma.position.findUnique({
+                where: { id: positionId }
             });
 
-            logger.debug('Position P&L updated:', positionId, unrealizedPnL);
+            if (!position) {
+                throw new Error(`Position not found: ${positionId}`);
+            }
+
+            const priceDiff = currentPrice - position.averagePrice;
+            const unrealizedPnL = position.side === 'LONG' ? priceDiff : -priceDiff;
+            const totalPnL = unrealizedPnL * position.quantity;
+
+            await prisma.position.update({
+                where: { id: positionId },
+                data: {
+                    currentPrice,
+                    unrealizedPnL: totalPnL
+                }
+            });
+
+            logger.info('Position P&L updated:', positionId, totalPnL);
+            return totalPnL;
         } catch (error) {
             logger.error('Failed to update position P&L:', error);
             throw error;
@@ -299,35 +333,42 @@ export class OrderService {
 
     async getPositionMetrics(sessionId: string) {
         try {
-            const positions = await db.findMany('Position', {
-                where: {
-                    sessionId,
-                    closeTime: null, // Only open positions
-                },
+            const positions = await prisma.position.findMany({
+                where: { sessionId },
                 include: {
-                    instrument: true,
-                },
+                    instrument: true
+                }
             });
 
-            let totalValue = 0;
-            let totalUnrealizedPnL = 0;
-            let totalRealizedPnL = 0;
-
-            for (const position of positions) {
-                if (position.currentPrice && position.quantity) {
-                    totalValue += position.currentPrice * Math.abs(position.quantity);
-                    totalUnrealizedPnL += position.unrealizedPnL || 0;
-                    totalRealizedPnL += position.realizedPnL || 0;
-                }
-            }
-
-            return {
-                openPositions: positions.length,
-                totalPositionValue: totalValue,
-                totalUnrealizedPnL,
-                totalRealizedPnL,
-                netPnL: totalUnrealizedPnL + totalRealizedPnL,
+            const metrics = {
+                totalPositions: positions.length,
+                openPositions: positions.filter(p => p.closeTime === null).length,
+                closedPositions: positions.filter(p => p.closeTime !== null).length,
+                totalRealizedPnL: positions.reduce((sum, p) => sum + (p.realizedPnL || 0), 0),
+                totalUnrealizedPnL: positions.reduce((sum, p) => sum + (p.unrealizedPnL || 0), 0),
+                longPositions: positions.filter(p => p.side === 'LONG').length,
+                shortPositions: positions.filter(p => p.side === 'SHORT').length,
+                positionsByInstrument: {}
             };
+
+            // Group positions by instrument
+            positions.forEach(position => {
+                const symbol = position.instrument.symbol;
+                if (!metrics.positionsByInstrument[symbol]) {
+                    metrics.positionsByInstrument[symbol] = {
+                        count: 0,
+                        totalPnL: 0,
+                        openPositions: 0
+                    };
+                }
+                metrics.positionsByInstrument[symbol].count++;
+                metrics.positionsByInstrument[symbol].totalPnL += (position.realizedPnL || 0) + (position.unrealizedPnL || 0);
+                if (position.closeTime === null) {
+                    metrics.positionsByInstrument[symbol].openPositions++;
+                }
+            });
+
+            return metrics;
         } catch (error) {
             logger.error('Failed to get position metrics:', error);
             throw error;
@@ -336,21 +377,23 @@ export class OrderService {
 
     async getSessionPnL(sessionId: string) {
         try {
-            const positions = await db.findMany('Position', {
-                where: { sessionId },
-                select: {
-                    realizedPnL: true,
-                    unrealizedPnL: true,
-                },
+            const trades = await prisma.trade.findMany({
+                where: { sessionId }
             });
 
-            const totalRealizedPnL = positions.reduce((sum, pos) => sum + (pos.realizedPnL || 0), 0);
-            const totalUnrealizedPnL = positions.reduce((sum, pos) => sum + (pos.unrealizedPnL || 0), 0);
+            const positions = await prisma.position.findMany({
+                where: { sessionId }
+            });
+
+            const realizedPnL = trades.reduce((sum, trade) => sum + (trade.realizedPnL || 0), 0);
+            const unrealizedPnL = positions.reduce((sum, position) => sum + (position.unrealizedPnL || 0), 0);
 
             return {
-                realizedPnL: totalRealizedPnL,
-                unrealizedPnL: totalUnrealizedPnL,
-                totalPnL: totalRealizedPnL + totalUnrealizedPnL,
+                realizedPnL,
+                unrealizedPnL,
+                totalPnL: realizedPnL + unrealizedPnL,
+                tradeCount: trades.length,
+                positionCount: positions.length
             };
         } catch (error) {
             logger.error('Failed to get session P&L:', error);
@@ -360,11 +403,9 @@ export class OrderService {
 
     async getRecentTrades(limit: number = 10) {
         try {
-            const trades = await db.findMany('Trade', {
+            const trades = await prisma.trade.findMany({
                 take: limit,
-                orderBy: {
-                    orderTime: 'desc'
-                },
+                orderBy: { orderTime: 'desc' },
                 include: {
                     instrument: true
                 }
