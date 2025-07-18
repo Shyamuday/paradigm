@@ -152,4 +152,23 @@ export {
 export {
   DatabaseOptimizationExample,
   runDatabaseOptimizationExample
-} from './examples/database-optimization-integration'; 
+} from './examples/database-optimization-integration';
+
+// Multi-level caching
+export {
+  MultiLevelCacheService,
+  CacheConfig,
+  CacheItem,
+  CacheStats,
+  CacheOperation,
+  MultiLevelCacheConfig
+} from './services/multi-level-cache.service';
+export {
+  MultiLevelCacheMiddleware,
+  CacheMiddlewareConfig,
+  CachedResponse
+} from './middleware/multi-level-cache';
+export {
+  MultiLevelCacheExample,
+  runMultiLevelCacheExample
+} from './examples/multi-level-cache-integration'; 
