@@ -38,7 +38,9 @@ export * from './types.exports';
 
 /**
  * Initialize the complete Paradigm Trading System
- * This function sets up all core services and returns a configured system instance
+ * Sets up all core services and returns a configured system instance.
+ * @param {any} [config] - Optional configuration object.
+ * @returns {Promise<object>} The initialized system instance.
  */
 export async function initializeParadigmSystem(config?: any) {
   const system = {
@@ -86,7 +88,9 @@ export async function initializeParadigmSystem(config?: any) {
 }
 
 /**
- * Quick start function for common trading scenarios
+ * Quick start function for common trading scenarios.
+ * Initializes and starts the Paradigm Trading System.
+ * @returns {Promise<object>} The ready system instance.
  */
 export async function quickStart() {
   const system = await initializeParadigmSystem();
@@ -100,11 +104,28 @@ export async function quickStart() {
 // VERSION & METADATA
 // ============================================================================
 
+/**
+ * Current version of the Paradigm Trading System.
+ * @type {string}
+ */
 export const VERSION = '2.0.0';
+
+/**
+ * System name.
+ * @type {string}
+ */
 export const SYSTEM_NAME = 'Paradigm Trading System';
+
+/**
+ * System description.
+ * @type {string}
+ */
 export const DESCRIPTION = 'Advanced algorithmic trading platform with comprehensive features';
 
-// Export metadata
+/**
+ * System metadata including version, name, description, features, and architecture.
+ * @type {object}
+ */
 export const metadata = {
   version: VERSION,
   name: SYSTEM_NAME,
@@ -146,7 +167,9 @@ export const metadata = {
   }
 };
 
-// Default export for convenience
+/**
+ * Default export for convenience, includes version, name, description, services, middleware, strategies, examples, initialization helpers, and metadata.
+ */
 export default {
   VERSION,
   SYSTEM_NAME,
