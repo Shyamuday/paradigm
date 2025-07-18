@@ -40,7 +40,9 @@
         "security:demo": "ts-node src/examples/security-validation-integration.ts",
         "security:test": "jest src/__tests__/security-validator.test.ts",
         "db:optimize:demo": "ts-node src/examples/database-optimization-integration.ts",
-        "db:optimize:test": "jest src/__tests__/database-optimization.test.ts"
+        "db:optimize:test": "jest src/__tests__/database-optimization.test.ts",
+        "cache:demo": "ts-node src/examples/multi-level-cache-integration.ts",
+        "cache:test": "jest src/__tests__/multi-level-cache.test.ts"
     },
     "keywords": [
         "trading",
