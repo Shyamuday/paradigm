@@ -74,32 +74,18 @@ export class MultiLevelCacheService extends EventEmitter {
 
   constructor(config: MultiLevelCacheConfig) {
     super();
+    // Merge config defaults without overwriting
     this.config = {
-      l1: {
-        level: 'L1',
-        ttl: 300, // 5 minutes
-        maxSize: 1000,
-        strategy: 'LRU',
-        enabled: true
-      },
-      l2: {
-        level: 'L2',
-        ttl: 3600, // 1 hour
-        strategy: 'LRU',
-        enabled: true
-      },
-      l3: {
-        level: 'L3',
-        ttl: 86400, // 24 hours
-        strategy: 'LRU',
-        enabled: true
-      },
-      enableMetrics: true,
-      enableCompression: false,
-      enableEncryption: false,
-      ...config
+      l1: { ...{ level: 'L1', ttl: 300, maxSize: 1000, strategy: 'LRU', enabled: true }, ...(config.l1 || {}) },
+      l2: { ...{ level: 'L2', ttl: 3600, strategy: 'LRU', enabled: true }, ...(config.l2 || {}) },
+      l3: { ...{ level: 'L3', ttl: 86400, strategy: 'LRU', enabled: true }, ...(config.l3 || {}) },
+      redis: config.redis || { host: 'localhost', port: 6379 },
+      enableMetrics: config.enableMetrics ?? true,
+      enableCompression: config.enableCompression ?? false,
+      enableEncryption: config.enableEncryption ?? false,
+      encryptionKey: config.encryptionKey ?? '',
+      ...(config.prisma ? { prisma: config.prisma } : {})
     };
-
     this.initializeCache();
     this.setupEventHandlers();
   }
@@ -162,15 +148,17 @@ export class MultiLevelCacheService extends EventEmitter {
    */
   private async initializeL2Cache(): Promise<void> {
     try {
-      this.redis = new Redis({
+      const redisOptions: any = {
         host: this.config.redis!.host,
         port: this.config.redis!.port,
-        password: this.config.redis!.password,
         db: this.config.redis!.db || 0,
-        retryDelayOnFailover: 100,
         maxRetriesPerRequest: 3,
         lazyConnect: true
-      });
+      };
+      if (this.config.redis!.password) {
+        redisOptions.password = this.config.redis!.password;
+      }
+      this.redis = new Redis(redisOptions);
 
       this.redis.on('error', (error) => {
         logger.error('Redis connection error:', error);
@@ -278,7 +266,7 @@ export class MultiLevelCacheService extends EventEmitter {
 
     } catch (error) {
       logger.error(`Error getting value for key ${key}:`, error);
-      this.recordOperation('GET', key, level, Date.now() - startTime, false, error.message);
+      this.recordOperation('GET', key, level, Date.now() - startTime, false, error instanceof Error ? error.message : String(error));
       return null;
     }
   }
@@ -310,7 +298,7 @@ export class MultiLevelCacheService extends EventEmitter {
 
     } catch (error) {
       logger.error(`Error setting value for key ${key}:`, error);
-      this.recordOperation('SET', key, 'ALL', Date.now() - startTime, false, error.message);
+      this.recordOperation('SET', key, 'ALL', Date.now() - startTime, false, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -341,7 +329,7 @@ export class MultiLevelCacheService extends EventEmitter {
 
     } catch (error) {
       logger.error(`Error deleting value for key ${key}:`, error);
-      this.recordOperation('DELETE', key, 'ALL', Date.now() - startTime, false, error.message);
+      this.recordOperation('DELETE', key, 'ALL', Date.now() - startTime, false, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -372,7 +360,7 @@ export class MultiLevelCacheService extends EventEmitter {
 
     } catch (error) {
       logger.error(`Error invalidating cache by tags ${tags}:`, error);
-      this.recordOperation('INVALIDATE', tags.join(','), 'ALL', Date.now() - startTime, false, error.message);
+      this.recordOperation('INVALIDATE', tags.join(','), 'ALL', Date.now() - startTime, false, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -386,20 +374,16 @@ export class MultiLevelCacheService extends EventEmitter {
         this.l1Cache.clear();
         this.updateL1Stats();
       }
-
       // Clear L2 cache (Redis)
       if (this.config.l2.enabled && this.redis) {
         await this.redis.flushdb();
       }
-
       // Clear L3 cache (Database)
       if (this.config.l3.enabled && this.prisma) {
-        await this.prisma.cache.deleteMany();
+        await this.prisma.dataCache.deleteMany();
       }
-
       this.emit('cacheClear');
       logger.info('All cache levels cleared');
-
     } catch (error) {
       logger.error('Error clearing cache:', error);
     }
@@ -424,7 +408,7 @@ export class MultiLevelCacheService extends EventEmitter {
    */
   private async getFromL1<T>(key: string): Promise<T | null> {
     const item = this.l1Cache.get(key);
-    
+
     if (!item) {
       this.updateL1Stats('miss');
       return null;
@@ -454,7 +438,7 @@ export class MultiLevelCacheService extends EventEmitter {
       ttl: ttl || this.config.l1.ttl || 300,
       accessCount: 1,
       lastAccessed: Date.now(),
-      tags,
+      tags: tags || [],
       priority: 1
     };
 
@@ -575,11 +559,11 @@ export class MultiLevelCacheService extends EventEmitter {
       } else if (type === 'miss') {
         stats.misses++;
       }
-      
+
       const total = stats.hits + stats.misses;
       stats.hitRate = total > 0 ? (stats.hits / total) * 100 : 0;
       stats.size = this.l1Cache.size;
-      
+
       this.stats.set('L1', stats);
     }
   }
@@ -613,9 +597,9 @@ export class MultiLevelCacheService extends EventEmitter {
     try {
       const serializedValue = this.serializeValue(value, tags);
       const cacheTtl = ttl || this.config.l2.ttl || 3600;
-      
+
       await this.redis.setex(key, cacheTtl, serializedValue);
-      
+
       // Store tags for invalidation
       if (tags && tags.length > 0) {
         for (const tag of tags) {
@@ -659,30 +643,25 @@ export class MultiLevelCacheService extends EventEmitter {
    */
   private async getFromL3<T>(key: string): Promise<T | null> {
     if (!this.prisma) return null;
-
     try {
-      const cacheEntry = await this.prisma.cache.findUnique({
-        where: { key }
+      const cacheEntry = await this.prisma.dataCache.findUnique({
+        where: { cacheKey: key }
       });
-
       if (!cacheEntry) {
         this.updateL3Stats('miss');
         return null;
       }
-
       // Check if expired
       if (new Date() > cacheEntry.expiresAt) {
-        await this.prisma.cache.delete({
-          where: { key }
+        await this.prisma.dataCache.delete({
+          where: { cacheKey: key }
         });
         this.updateL3Stats('miss');
         return null;
       }
-
-      const parsedValue = this.parseValue<T>(cacheEntry.value);
+      const parsedValue = this.parseValue<T>(JSON.stringify(cacheEntry.cacheValue));
       this.updateL3Stats('hit');
       return parsedValue;
-
     } catch (error) {
       logger.error(`Error getting from L3 cache: ${error}`);
       return null;
@@ -691,28 +670,26 @@ export class MultiLevelCacheService extends EventEmitter {
 
   private async setToL3<T>(key: string, value: T, tags?: string[], ttl?: number): Promise<void> {
     if (!this.prisma) return;
-
     try {
       const serializedValue = this.serializeValue(value, tags);
       const cacheTtl = ttl || this.config.l3.ttl || 86400;
       const expiresAt = new Date(Date.now() + cacheTtl * 1000);
-
-      await this.prisma.cache.upsert({
-        where: { key },
+      await this.prisma.dataCache.upsert({
+        where: { cacheKey: key },
         update: {
-          value: serializedValue,
+          cacheValue: JSON.parse(serializedValue),
           expiresAt,
-          tags: tags ? tags.join(',') : null,
-          updatedAt: new Date()
+          lastAccessed: new Date(),
+          accessCount: { increment: 1 }
         },
         create: {
-          key,
-          value: serializedValue,
+          cacheKey: key,
+          cacheValue: JSON.parse(serializedValue),
           expiresAt,
-          tags: tags ? tags.join(',') : null
+          lastAccessed: new Date(),
+          accessCount: 1
         }
       });
-
     } catch (error) {
       logger.error(`Error setting to L3 cache: ${error}`);
     }
@@ -720,10 +697,9 @@ export class MultiLevelCacheService extends EventEmitter {
 
   private async deleteFromL3(key: string): Promise<void> {
     if (!this.prisma) return;
-
     try {
-      await this.prisma.cache.delete({
-        where: { key }
+      await this.prisma.dataCache.delete({
+        where: { cacheKey: key }
       });
     } catch (error) {
       logger.error(`Error deleting from L3 cache: ${error}`);
@@ -732,13 +708,13 @@ export class MultiLevelCacheService extends EventEmitter {
 
   private async invalidateL3ByTags(tags: string[]): Promise<void> {
     if (!this.prisma) return;
-
     try {
       for (const tag of tags) {
-        await this.prisma.cache.deleteMany({
+        await this.prisma.dataCache.deleteMany({
           where: {
-            tags: {
-              contains: tag
+            cacheValue: {
+              path: ['tags'],
+              array_contains: tag
             }
           }
         });
@@ -796,10 +772,10 @@ export class MultiLevelCacheService extends EventEmitter {
       } else if (type === 'miss') {
         stats.misses++;
       }
-      
+
       const total = stats.hits + stats.misses;
       stats.hitRate = total > 0 ? (stats.hits / total) * 100 : 0;
-      
+
       this.stats.set('L2', stats);
     }
   }
@@ -812,17 +788,16 @@ export class MultiLevelCacheService extends EventEmitter {
       } else if (type === 'miss') {
         stats.misses++;
       }
-      
+
       const total = stats.hits + stats.misses;
       stats.hitRate = total > 0 ? (stats.hits / total) * 100 : 0;
-      
+
       this.stats.set('L3', stats);
     }
   }
 
   private recordOperation(operation: string, key: string, level: string, duration: number, success: boolean, error?: string): void {
     if (!this.config.enableMetrics) return;
-
     const cacheOp: CacheOperation = {
       operation: operation as any,
       key,
@@ -830,11 +805,9 @@ export class MultiLevelCacheService extends EventEmitter {
       timestamp: Date.now(),
       duration,
       success,
-      error
+      error: error || ''
     };
-
     this.operations.push(cacheOp);
-
     // Keep only recent operations
     if (this.operations.length > this.maxOperationsHistory) {
       this.operations = this.operations.slice(-this.maxOperationsHistory);
@@ -894,10 +867,10 @@ export class MultiLevelCacheService extends EventEmitter {
       if (this.redis) {
         await this.redis.disconnect();
       }
-      
+
       this.l1Cache.clear();
       this.removeAllListeners();
-      
+
       logger.info('Multi-level cache service disposed');
     } catch (error) {
       logger.error('Error disposing cache service:', error);

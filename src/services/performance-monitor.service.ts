@@ -78,7 +78,7 @@ export class PerformanceMonitorService extends EventEmitter {
       value,
       unit,
       timestamp: new Date(),
-      metadata
+      metadata: metadata ?? {} // Always provide an object
     };
 
     if (!this.metrics.has(name)) {
@@ -147,7 +147,7 @@ export class PerformanceMonitorService extends EventEmitter {
    */
   measure(name: string, startMark: string, endMark: string): void {
     if (!this.isMonitoring) return;
-    
+
     try {
       const measure = performance.measure(name, startMark, endMark);
       this.recordMetric(name, measure.duration, 'ms');
@@ -168,7 +168,7 @@ export class PerformanceMonitorService extends EventEmitter {
   /**
    * Get performance statistics for a metric
    */
-  getStats(metricName: string, duration: number = 3600000): { // Default 1 hour
+  getStats(metricName: string, duration: number = 3600000): {
     count: number;
     min: number;
     max: number;
@@ -184,19 +184,19 @@ export class PerformanceMonitorService extends EventEmitter {
 
     const cutoff = Date.now() - duration;
     const recentMetrics = metrics.filter(m => m.timestamp.getTime() > cutoff);
-    
+
     if (recentMetrics.length === 0) {
       return null;
     }
 
     const values = recentMetrics.map(m => m.value).sort((a, b) => a - b);
     const count = values.length;
-    const min = values[0];
-    const max = values[count - 1];
-    const avg = values.reduce((a, b) => a + b, 0) / count;
-    const median = values[Math.floor(count / 2)];
-    const p95 = values[Math.floor(count * 0.95)];
-    const p99 = values[Math.floor(count * 0.99)];
+    const min = values[0] ?? 0;
+    const max = values[count - 1] ?? 0;
+    const avg = values.reduce((a, b) => a + b, 0) / count || 0;
+    const median = values[Math.floor(count / 2)] ?? 0;
+    const p95 = values[Math.floor(count * 0.95)] ?? 0;
+    const p99 = values[Math.floor(count * 0.99)] ?? 0;
 
     return { count, min, max, avg, median, p95, p99 };
   }
@@ -285,8 +285,9 @@ export class PerformanceMonitorService extends EventEmitter {
     for (const [name, metrics] of this.metrics.entries()) {
       const threshold = this.thresholds.get(name);
       if (threshold && metrics.length > 0) {
-        const latestValue = metrics[metrics.length - 1].value;
-        
+        const latestMetric = metrics.length > 0 ? metrics[metrics.length - 1] : undefined;
+        const latestValue = latestMetric?.value ?? 0;
+
         if (latestValue >= threshold.critical) {
           alerts.push({
             level: 'critical',
@@ -338,9 +339,9 @@ export class PerformanceMonitorService extends EventEmitter {
     const markObserver = new PerformanceObserver((list) => {
       const entries = list.getEntries();
       for (const entry of entries) {
-        logger.debug('Performance mark observed', { 
-          name: entry.name, 
-          startTime: entry.startTime 
+        logger.debug('Performance mark observed', {
+          name: entry.name,
+          startTime: entry.startTime
         });
       }
     });
@@ -364,7 +365,7 @@ export class PerformanceMonitorService extends EventEmitter {
         timestamp: metric.timestamp,
         message: `${metric.name} exceeded critical threshold: ${metric.value} ${metric.unit} >= ${threshold.critical} ${threshold.unit}`
       };
-      
+
       this.emit('alert', alert);
       logger.error('Performance alert: Critical', alert);
     } else if (metric.value >= threshold.warning) {
@@ -376,7 +377,7 @@ export class PerformanceMonitorService extends EventEmitter {
         timestamp: metric.timestamp,
         message: `${metric.name} exceeded warning threshold: ${metric.value} ${metric.unit} >= ${threshold.warning} ${threshold.unit}`
       };
-      
+
       this.emit('alert', alert);
       logger.warn('Performance alert: Warning', alert);
     }
@@ -450,32 +451,32 @@ export const tradingMetrics = {
   // API performance
   API_REQUEST: 'api_request_duration',
   API_RESPONSE: 'api_response_duration',
-  
+
   // Strategy performance
   STRATEGY_EXECUTION: 'strategy_execution_duration',
   STRATEGY_SIGNAL_GENERATION: 'strategy_signal_generation_duration',
-  
+
   // Order performance
   ORDER_PLACEMENT: 'order_placement_duration',
   ORDER_MODIFICATION: 'order_modification_duration',
   ORDER_CANCELLATION: 'order_cancellation_duration',
-  
+
   // Market data performance
   MARKET_DATA_FETCH: 'market_data_fetch_duration',
   MARKET_DATA_PROCESSING: 'market_data_processing_duration',
-  
+
   // Database performance
   DATABASE_QUERY: 'database_query_duration',
   DATABASE_WRITE: 'database_write_duration',
-  
+
   // Cache performance
   CACHE_GET: 'cache_get_duration',
   CACHE_SET: 'cache_set_duration',
-  
+
   // Risk management
   RISK_CHECK: 'risk_check_duration',
   POSITION_CALCULATION: 'position_calculation_duration',
-  
+
   // System performance
   MEMORY_USAGE: 'memory_usage_percentage',
   CPU_USAGE: 'cpu_usage_percentage',

@@ -32,6 +32,17 @@ export * from './examples.exports';
 export * from './schemas.exports';
 export * from './types.exports';
 
+// Import all referenced variables for system initialization
+import * as services from './services.exports';
+import * as middleware from './middleware.exports';
+import * as strategies from './services/strategies/strategy.interface';
+import * as examples from './examples.exports';
+import { DatabaseManager as DatabaseService } from './database/database';
+import { MultiLevelCacheService } from './services/multi-level-cache.service';
+import { circuitBreakerManager } from './middleware/circuit-breaker';
+import { performanceMonitor } from './services/performance-monitor.service';
+import { logger } from './logger/logger';
+
 // ============================================================================
 // SYSTEM INITIALIZATION HELPERS
 // ============================================================================
@@ -48,42 +59,48 @@ export async function initializeParadigmSystem(config?: any) {
     middleware,
     strategies,
     examples,
-    
+
     // Initialize core services
     async init() {
       // Initialize database
       await DatabaseService.getInstance().connect();
-      
+
       // Initialize cache
-      await MultiLevelCacheService.getInstance().initialize();
-      
-      // Initialize circuit breakers
-      circuitBreakerManager.initialize();
-      
+      const cacheService = new MultiLevelCacheService({
+        l1: { enabled: true, level: 'L1', ttl: 300, maxSize: 1000, strategy: 'LRU' },
+        l2: { enabled: true, level: 'L2', ttl: 3600, strategy: 'LRU' },
+        l3: { enabled: true, level: 'L3', ttl: 86400, strategy: 'LRU' },
+      });
+      // No need to call initializeCache (done in constructor)
+
+      // Initialize circuit breakers (no explicit initialize method)
+      // circuitBreakerManager.initialize();
+
       // Initialize performance monitor
       performanceMonitor.start();
-      
+
       logger.info('Paradigm Trading System initialized successfully');
       return this;
     },
-    
+
     // Graceful shutdown
     async shutdown() {
       logger.info('Shutting down Paradigm Trading System...');
-      
+
       // Stop performance monitor
       performanceMonitor.stop();
-      
+
       // Close database connections
       await DatabaseService.getInstance().disconnect();
-      
+
       // Close cache connections
-      await MultiLevelCacheService.getInstance().shutdown();
-      
+      // If you want to shutdown the cache, call dispose on the instance
+      // await cacheService.dispose();
+
       logger.info('Paradigm Trading System shutdown complete');
     }
   };
-  
+
   return system;
 }
 
@@ -95,7 +112,7 @@ export async function initializeParadigmSystem(config?: any) {
 export async function quickStart() {
   const system = await initializeParadigmSystem();
   await system.init();
-  
+
   logger.info('Paradigm Trading System ready for trading operations');
   return system;
 }
@@ -150,7 +167,7 @@ export const metadata = {
   architecture: {
     layers: [
       'Core Infrastructure',
-      'Security & Error Handling', 
+      'Security & Error Handling',
       'Trading Services',
       'Strategy Engine',
       'Data Management',

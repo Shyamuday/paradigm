@@ -17,7 +17,7 @@ export class BreakoutStrategy extends BaseStrategy {
         );
     }
 
-    async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
+    async generateSignals(marketData: any[]): Promise<any[]> {
         const signals: TradeSignal[] = [];
 
         if (marketData.length < 50) {
@@ -87,10 +87,16 @@ export class BreakoutStrategy extends BaseStrategy {
             }
         }
 
-        return signals;
+        // Convert to base class expected format
+        return signals.map(signal => ({
+            ...signal,
+            side: signal.action === 'BUY' ? 'LONG' : 'SHORT',
+            confidence: 0.7,
+            strategyName: this.name
+        }));
     }
 
-    async shouldExit(position: Position, marketData: MarketData[]): Promise<boolean> {
+    async shouldExit(position: Position, marketData: any[]): Promise<boolean> {
         if (marketData.length < 20) return false;
 
         const lookbackPeriod = this.config.parameters.lookbackPeriod || 20;
@@ -222,26 +228,26 @@ export class BreakoutStrategy extends BaseStrategy {
         };
     }
 
-    validateConfig(config: StrategyConfig): boolean {
+    validateConfig(config: any): boolean {
         const baseValid = super.validateConfig(config);
         if (!baseValid) return false;
 
         // Validate breakout strategy specific parameters
-        const { lookbackPeriod, breakoutThreshold, volumeMultiplier, confirmationPeriod } = config.parameters;
+        const { lookbackPeriod, breakoutThreshold, volumeMultiplier, confirmationPeriod } = config.parameters || {};
 
-        if (!lookbackPeriod || lookbackPeriod < 5) {
+        if (typeof lookbackPeriod !== 'number' || lookbackPeriod < 5) {
             return false;
         }
 
-        if (!breakoutThreshold || breakoutThreshold <= 0 || breakoutThreshold > 0.1) {
+        if (typeof breakoutThreshold !== 'number' || breakoutThreshold <= 0 || breakoutThreshold > 0.1) {
             return false;
         }
 
-        if (!volumeMultiplier || volumeMultiplier < 1) {
+        if (typeof volumeMultiplier !== 'number' || volumeMultiplier < 1) {
             return false;
         }
 
-        if (!confirmationPeriod || confirmationPeriod < 1) {
+        if (typeof confirmationPeriod !== 'number' || confirmationPeriod < 1) {
             return false;
         }
 

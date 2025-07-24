@@ -1,17 +1,17 @@
-import { createAutoTOTPAuth } from '../auth/easy-auth';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { InstrumentsManager } from '../services/instruments-manager.service';
-import { OrderManager } from '../services/order-manager.service';
-import { WebSocketManager, TickData } from '../services/websocket-manager.service';
+import { OrderManagerService } from '../services/order-manager.service';
+import { WebSocketManager } from '../services/websocket-manager.service';
 import { logger } from '../logger/logger';
 
 /**
  * Complete Trading System Integration Example
  */
 class CompleteTradingSystem {
-    private auth: any;
-    private instrumentsManager: InstrumentsManager;
-    private orderManager: OrderManager;
-    private webSocketManager: WebSocketManager;
+    private auth!: ZerodhaAuth;
+    private instrumentsManager!: InstrumentsManager;
+    private orderManager!: OrderManagerService;
+    private webSocketManager!: WebSocketManager;
     private isRunning: boolean = false;
 
     // Trading configuration
@@ -25,14 +25,15 @@ class CompleteTradingSystem {
 
             // 1. Authentication
             console.log('🔐 Step 1: Authenticating with Zerodha...');
-            this.auth = await createAutoTOTPAuth();
+            this.auth = new ZerodhaAuth();
+            await this.auth.startOAuthLogin();
             console.log('✅ Authentication successful\n');
 
             // 2. Initialize managers
             console.log('📊 Step 2: Initializing managers...');
             this.instrumentsManager = new InstrumentsManager(this.auth);
-            this.orderManager = new OrderManager(this.auth, this.instrumentsManager);
-            this.webSocketManager = new WebSocketManager(this.auth);
+            this.orderManager = new OrderManagerService(this.auth.getKite(), 'session_' + Date.now());
+            this.webSocketManager = new WebSocketManager(this.auth.getKite());
             console.log('✅ Managers initialized\n');
 
             // 3. Load instruments
@@ -67,8 +68,8 @@ class CompleteTradingSystem {
             console.log('✅ WebSocket connected');
         });
 
-        this.webSocketManager.on('ticks', (ticks: TickData[]) => {
-            this.handleTickData(ticks);
+        this.webSocketManager.on('tick', (tick: any) => {
+            this.handleTickData([tick]);
         });
 
         this.webSocketManager.on('disconnected', (error) => {
@@ -80,7 +81,7 @@ class CompleteTradingSystem {
         });
 
         // Connect
-        await this.webSocketManager.connect();
+        this.webSocketManager.connect();
     }
 
     /**
@@ -105,7 +106,7 @@ class CompleteTradingSystem {
 
         // Subscribe to real-time data
         if (this.watchlist.length > 0) {
-            this.webSocketManager.subscribe(this.watchlist, 'full');
+            this.webSocketManager.subscribe(this.watchlist);
             console.log(`📡 Subscribed to ${this.watchlist.length} instruments`);
         }
     }
@@ -113,16 +114,16 @@ class CompleteTradingSystem {
     /**
      * Handle incoming tick data
      */
-    private handleTickData(ticks: TickData[]): void {
+    private handleTickData(ticks: any[]): void {
         ticks.forEach(tick => {
-            const previousPrice = this.currentPrices.get(tick.instrument_token);
-            this.currentPrices.set(tick.instrument_token, tick.last_price);
+            const previousPrice = this.currentPrices.get(tick.instrumentToken);
+            this.currentPrices.set(tick.instrumentToken, tick.lastPrice);
 
             // Log price updates
-            if (previousPrice && Math.abs(tick.last_price - previousPrice) > 0.1) {
-                const change = tick.last_price - previousPrice;
+            if (previousPrice && Math.abs(tick.lastPrice - previousPrice) > 0.1) {
+                const change = tick.lastPrice - previousPrice;
                 const changePercent = (change / previousPrice) * 100;
-                console.log(`📈 Price Update: Token ${tick.instrument_token} = ₹${tick.last_price} (${change > 0 ? '+' : ''}${changePercent.toFixed(2)}%)`);
+                console.log(`📈 Price Update: Token ${tick.instrumentToken} = ₹${tick.lastPrice} (${change > 0 ? '+' : ''}${changePercent.toFixed(2)}%)`);
             }
 
             // Check for trading opportunities
@@ -133,9 +134,9 @@ class CompleteTradingSystem {
     /**
      * Simple trading signal logic (example)
      */
-    private checkTradingSignals(tick: TickData): void {
+    private checkTradingSignals(tick: any): void {
         // Simple example: Buy if price drops 2%, sell if it rises 2%
-        const instrument = this.getInstrumentByToken(tick.instrument_token);
+        const instrument = this.getInstrumentByToken(tick.instrumentToken);
         if (!instrument) return;
 
         const changePercent = tick.change;
@@ -157,16 +158,22 @@ class CompleteTradingSystem {
         try {
             console.log(`📋 Placing BUY order: ${quantity} ${tradingsymbol}`);
 
-            const result = await this.orderManager.marketOrder(
-                tradingsymbol,
-                'NSE',
-                'BUY',
-                quantity,
-                'MIS' // Intraday
-            );
+            // Create a trade signal for the order
+            const signal = {
+                id: `signal_${Date.now()}`,
+                strategy: 'manual',
+                symbol: tradingsymbol,
+                action: 'BUY' as const,
+                quantity: quantity,
+                price: 0, // Market order
+                timestamp: new Date(),
+                metadata: {}
+            };
 
-            console.log(`✅ BUY order placed: ${result.order_id}`);
-            this.orders.set(result.order_id, {
+            const result = await this.orderManager.placeOrder(signal);
+
+            console.log(`✅ BUY order placed: ${result}`);
+            this.orders.set(result, {
                 symbol: tradingsymbol,
                 type: 'BUY',
                 quantity,
@@ -185,16 +192,22 @@ class CompleteTradingSystem {
         try {
             console.log(`📋 Placing SELL order: ${quantity} ${tradingsymbol}`);
 
-            const result = await this.orderManager.marketOrder(
-                tradingsymbol,
-                'NSE',
-                'SELL',
-                quantity,
-                'MIS' // Intraday
-            );
+            // Create a trade signal for the order
+            const signal = {
+                id: `signal_${Date.now()}`,
+                strategy: 'manual',
+                symbol: tradingsymbol,
+                action: 'SELL' as const,
+                quantity: quantity,
+                price: 0, // Market order
+                timestamp: new Date(),
+                metadata: {}
+            };
 
-            console.log(`✅ SELL order placed: ${result.order_id}`);
-            this.orders.set(result.order_id, {
+            const result = await this.orderManager.placeOrder(signal);
+
+            console.log(`✅ SELL order placed: ${result}`);
+            this.orders.set(result, {
                 symbol: tradingsymbol,
                 type: 'SELL',
                 quantity,
@@ -247,8 +260,8 @@ class CompleteTradingSystem {
      */
     private async monitorOrders(): Promise<void> {
         try {
-            const orders = await this.orderManager.getAllOrders();
-            const todayOrders = orders.filter(order => {
+            const orders = await this.orderManager.getOrderBook();
+            const todayOrders = orders.filter((order: any) => {
                 const orderDate = new Date(order.order_timestamp);
                 const today = new Date();
                 return orderDate.toDateString() === today.toDateString();
@@ -256,7 +269,7 @@ class CompleteTradingSystem {
 
             if (todayOrders.length > 0) {
                 console.log(`📋 Today's Orders: ${todayOrders.length}`);
-                todayOrders.slice(-5).forEach(order => {
+                todayOrders.slice(-5).forEach((order: any) => {
                     console.log(`   ${order.tradingsymbol} ${order.transaction_type} ${order.quantity} - ${order.status}`);
                 });
             }
@@ -271,8 +284,12 @@ class CompleteTradingSystem {
      */
     private async displayPortfolioSummary(): Promise<void> {
         try {
-            const summary = await this.orderManager.getPortfolioSummary();
-            console.log(`💼 Portfolio: Value ₹${summary.totalValue.toFixed(2)} | P&L ₹${summary.totalPnL.toFixed(2)} | Positions ${summary.positionsCount}`);
+            const positions = await this.orderManager.getPositions();
+            const netPositions = positions.net;
+            const totalValue = netPositions.reduce((sum: number, pos: any) => sum + (pos.quantity * pos.average_price), 0);
+            const totalPnL = netPositions.reduce((sum: number, pos: any) => sum + (pos.pnl || 0), 0);
+
+            console.log(`💼 Portfolio: Value ₹${totalValue.toFixed(2)} | P&L ₹${totalPnL.toFixed(2)} | Positions ${netPositions.length}`);
         } catch (error) {
             // Portfolio might be empty, that's ok
         }
@@ -300,51 +317,53 @@ class CompleteTradingSystem {
         // For demo purposes, we'll return a mock
         const symbolMap: any = {
             738561: { tradingsymbol: 'RELIANCE' },
-            2885633: { tradingsymbol: 'TCS' },
-            // Add more mappings as needed
+            11536: { tradingsymbol: 'TCS' },
+            341: { tradingsymbol: 'HDFCBANK' },
+            1594: { tradingsymbol: 'INFY' },
+            4963: { tradingsymbol: 'ICICIBANK' }
         };
         return symbolMap[token];
     }
 
     private hasOpenPosition(tradingsymbol: string): boolean {
-        // Check if we have an open position for this symbol
-        // This would normally query the order manager
-        return false; // For demo purposes
+        // This would normally check actual positions
+        // For demo purposes, return false
+        return false;
     }
 
     /**
-     * Demo mode - runs for specified duration
+     * Run demo for specified duration
      */
     async runDemo(durationMinutes: number = 5): Promise<void> {
+        console.log(`🎬 Starting ${durationMinutes}-minute demo...\n`);
+
+        await this.initialize();
         await this.startTrading();
 
-        console.log(`🎯 Running demo for ${durationMinutes} minutes...`);
-        console.log('📝 Note: Trading signals are generated but orders are NOT placed');
-        console.log('📝 Uncomment the order placement lines to enable actual trading\n');
-
-        // Run for specified duration
+        // Stop after specified duration
         setTimeout(() => {
             this.stopTrading();
-            console.log('🎉 Demo completed!');
+            console.log('\n🎬 Demo completed!');
         }, durationMinutes * 60 * 1000);
     }
 }
 
 /**
- * Main function to run the complete integration example
+ * Main function to run the complete trading integration
  */
 async function runCompleteTradingIntegration(): Promise<void> {
     try {
         const tradingSystem = new CompleteTradingSystem();
-        await tradingSystem.initialize();
-        await tradingSystem.runDemo(5); // Run for 5 minutes
-
+        await tradingSystem.runDemo(5); // 5-minute demo
     } catch (error) {
-        console.error('❌ Trading system failed:', error);
+        console.error('❌ Trading integration failed:', error);
     }
 }
 
-// Run the complete integration
+// Export for use in other modules
+export { CompleteTradingSystem, runCompleteTradingIntegration };
+
+// Run if this file is executed directly
 if (require.main === module) {
-    runCompleteTradingIntegration().catch(console.error);
+    runCompleteTradingIntegration();
 } 

@@ -1,0 +1,14 @@
+src/services/strategies/enhanced-momentum-strategy.ts(88,68): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+src/services/strategies/enhanced-momentum-strategy.ts(514,20): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(553,42): error TS18048: 'current' is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(553,59): error TS18048: 'current' is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(554,43): error TS18048: 'previous' is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(554,61): error TS18048: 'previous' is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(600,38): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(600,55): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(601,39): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(601,65): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(620,39): error TS2532: Object is possibly 'undefined'.
+src/services/strategies/enhanced-momentum-strategy.ts(662,9): error TS2741: Property 'strategy' is missing in type '{ id: string; symbol: string; action: "BUY" | "SELL"; quantity: number; price: number; stopLoss: number; target: number; timestamp: Date; metadata: any; }' but required in type 'TradeSignal'.
+src/services/strategy-engine.service.ts(193,97): error TS18048: 'value' is possibly 'undefined'.

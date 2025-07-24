@@ -123,7 +123,7 @@ export class MockDataGenerator {
         return {
             id: `user_${Date.now()}`,
             email,
-            name: email.split('@')[0],
+            name: email.split('@')[0] || null,
             createdAt: new Date(),
             updatedAt: new Date()
         };

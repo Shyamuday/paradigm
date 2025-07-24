@@ -87,41 +87,46 @@ export class MachineLearningService {
 
     // Bollinger Bands features
     const bb = mathUtils.calculateBollingerBands(prices, 20, 2);
-    const bbPosition = (prices[prices.length - 1] - bb.lower[bb.lower.length - 1]) / (bb.upper[bb.upper.length - 1] - bb.lower[bb.lower.length - 1]);
+    const bbUpper = bb?.upper?.[bb.upper.length - 1] ?? 0;
+    const bbLower = bb?.lower?.[bb.lower.length - 1] ?? 0;
+    const bbMiddle = bb?.middle?.[bb.middle.length - 1] ?? 0;
+    const lastPrice = prices[prices.length - 1] ?? 0;
+    const bbDenominator = (bbUpper - bbLower) || 1;
+    const bbPosition = (lastPrice - bbLower) / bbDenominator;
 
     return {
       // Price features
       price_change: priceChange,
       price_volatility: priceVolatility,
       price_range: priceRange,
-      
+
       // Moving averages
       sma5_ratio: prices[prices.length - 1] / (sma5[sma5.length - 1] || 1),
       sma10_ratio: prices[prices.length - 1] / (sma10[sma10.length - 1] || 1),
       sma20_ratio: prices[prices.length - 1] / (sma20[sma20.length - 1] || 1),
-      
+
       // RSI
       rsi: rsi[rsi.length - 1] || 50,
       rsi_overbought: (rsi[rsi.length - 1] || 50) > 70 ? 1 : 0,
       rsi_oversold: (rsi[rsi.length - 1] || 50) < 30 ? 1 : 0,
-      
+
       // MACD
       macd_value: macd.macd[macd.macd.length - 1] || 0,
       macd_signal: macd.signal[macd.signal.length - 1] || 0,
       macd_histogram: macd.histogram[macd.histogram.length - 1] || 0,
-      
+
       // Volume features
       volume_change: volumeChange,
       volume_ratio: volumeRatio,
-      
+
       // Momentum
       momentum_5: momentum5,
       momentum_10: momentum10,
-      
+
       // Bollinger Bands
       bb_position: bbPosition,
-      bb_squeeze: (bb.upper[bb.upper.length - 1] - bb.lower[bb.lower.length - 1]) / (sma20[sma20.length - 1] || 1),
-      
+      bb_squeeze: bbDenominator / (sma20[sma20.length - 1] || 1),
+
       // Time features
       hour_of_day: new Date().getHours() / 24,
       day_of_week: new Date().getDay() / 7,
@@ -134,8 +139,8 @@ export class MachineLearningService {
    */
   async trainLinearModel(symbol: string, trainingData: TrainingData): Promise<MLModel> {
     try {
-      logger.info(`Training linear model for ${symbol}`, { 
-        samples: trainingData.features.length 
+      logger.info(`Training linear model for ${symbol}`, {
+        samples: trainingData.features.length
       });
 
       const X = new Matrix(trainingData.features);
@@ -151,7 +156,7 @@ export class MachineLearningService {
       const XTy = XT.mmul(y);
 
       // Solve linear system
-      const coefficients = XTX.solve(XTy);
+      const coefficients = (XTX as any).solve ? (XTX as any).solve(XTy) : [];
 
       // Calculate predictions and accuracy
       const predictions = XWithBias.mmul(coefficients);
@@ -171,9 +176,9 @@ export class MachineLearningService {
       };
 
       this.models.set(model.id, model);
-      logger.info(`Linear model trained successfully`, { 
-        symbol, 
-        accuracy: mathUtils.round(accuracy, 4) 
+      logger.info(`Linear model trained successfully`, {
+        symbol,
+        accuracy: mathUtils.round(accuracy, 4)
       });
 
       return model;
@@ -224,10 +229,10 @@ export class MachineLearningService {
         model: model.name
       };
 
-      logger.debug('ML prediction made', { 
-        symbol, 
-        prediction: signal, 
-        confidence: mathUtils.round(confidence, 4) 
+      logger.debug('ML prediction made', {
+        symbol,
+        prediction: signal,
+        confidence: mathUtils.round(confidence, 4)
       });
 
       return result;
@@ -245,7 +250,7 @@ export class MachineLearningService {
     let prediction = model.parameters.intercept;
 
     for (let i = 0; i < features.length; i++) {
-      prediction += features[i] * coefficients[i + 1]; // +1 for intercept
+      prediction += (features[i] ?? 0) * (coefficients[i + 1] ?? 0); // +1 for intercept
     }
 
     return prediction;
@@ -298,8 +303,8 @@ export class MachineLearningService {
 
     let correct = 0;
     for (let i = 0; i < predictions.length; i++) {
-      const predSignal = this.convertToSignal(predictions[i]);
-      const targetSignal = this.convertToSignal(targets[i]);
+      const predSignal = this.convertToSignal(predictions[i] ?? 0);
+      const targetSignal = this.convertToSignal(targets[i] ?? 0);
       if (predSignal === targetSignal) {
         correct++;
       }
@@ -346,9 +351,9 @@ export class MachineLearningService {
       data.symbols.shift();
     }
 
-    logger.debug('Training data added', { 
-      symbol, 
-      samples: data.features.length 
+    logger.debug('Training data added', {
+      symbol,
+      samples: data.features.length
     });
   }
 
@@ -389,7 +394,7 @@ export class MachineLearningService {
     const now = new Date();
     const hour = now.getHours();
     const day = now.getDay();
-    
+
     // Indian market hours: 9:15 AM to 3:30 PM, Monday to Friday
     return day >= 1 && day <= 5 && hour >= 9 && hour < 16;
   }

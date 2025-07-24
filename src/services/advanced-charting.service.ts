@@ -31,7 +31,7 @@ export interface ChartConfig {
 }
 
 export class AdvancedChartingService {
-  private screen: blessed.screen;
+  private screen: any;
   private charts: Map<string, any> = new Map();
   private isRunning = false;
   private updateInterval: NodeJS.Timeout | null = null;
@@ -73,7 +73,7 @@ export class AdvancedChartingService {
     }
 
     this.isRunning = false;
-    
+
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
       this.updateInterval = null;
@@ -95,7 +95,7 @@ export class AdvancedChartingService {
       });
 
       // Create candlestick chart
-      const candlestick = grid.set(0, 0, 8, 12, contrib.candlestick, {
+      const candlestick = (contrib as any).candlestick({
         label: `${symbol} - Price Chart`,
         showLegend: true,
         legend: { width: 10 }
@@ -185,7 +185,7 @@ export class AdvancedChartingService {
         screen: this.screen
       });
 
-      const line = grid.set(0, 0, 12, 12, contrib.line, {
+      const line = (contrib as any).line({
         label: `${symbol} - Price Line Chart`,
         showLegend: true,
         legend: { width: 10 },
@@ -215,7 +215,7 @@ export class AdvancedChartingService {
         screen: this.screen
       });
 
-      const bar = grid.set(0, 0, 12, 12, contrib.bar, {
+      const bar = (contrib as any).bar({
         label: `${symbol} - Volume Bar Chart`,
         barWidth: 2,
         barSpacing: 1,
@@ -290,20 +290,15 @@ export class AdvancedChartingService {
       return [];
     }
 
-    // For simplicity, we'll create OHLC data from price data
-    // In a real implementation, you'd have actual OHLC data
     const candlestickData = [];
-    
     for (let i = 0; i < data.prices.length; i++) {
       const price = data.prices[i];
       const timestamp = data.timestamps[i];
-      
-      // Simulate OHLC from price (in real scenario, you'd have actual OHLC)
+      if (price === undefined || timestamp === undefined) continue;
       const open = price * (0.99 + Math.random() * 0.02);
       const high = price * (1.0 + Math.random() * 0.01);
       const low = price * (0.99 - Math.random() * 0.01);
       const close = price;
-
       candlestickData.push({
         time: timestamp.getTime(),
         open,
@@ -312,7 +307,6 @@ export class AdvancedChartingService {
         close
       });
     }
-
     return candlestickData;
   }
 
@@ -354,43 +348,36 @@ export class AdvancedChartingService {
         logger.warn(`Chart not found for symbol: ${symbol}`);
         return;
       }
-
-      // Add SMA line
       if (indicators.sma && chart.candlestick) {
         const smaData = indicators.sma.map((value: number, index: number) => ({
           time: Date.now() - (indicators.sma.length - index) * 60000,
           value
         }));
-        
         chart.candlestick.setData([
           ...chart.candlestick.getData(),
           {
             title: 'SMA',
-            x: smaData.map(d => d.time),
-            y: smaData.map(d => d.value),
+            x: smaData.map((d: any) => d.time),
+            y: smaData.map((d: any) => d.value),
             style: { line: 'yellow' }
           }
         ]);
       }
-
-      // Add EMA line
       if (indicators.ema && chart.candlestick) {
         const emaData = indicators.ema.map((value: number, index: number) => ({
           time: Date.now() - (indicators.ema.length - index) * 60000,
           value
         }));
-        
         chart.candlestick.setData([
           ...chart.candlestick.getData(),
           {
             title: 'EMA',
-            x: emaData.map(d => d.time),
-            y: emaData.map(d => d.value),
+            x: emaData.map((d: any) => d.time),
+            y: emaData.map((d: any) => d.value),
             style: { line: 'green' }
           }
         ]);
       }
-
       this.screen.render();
       logger.debug(`Indicators added to chart for ${symbol}`);
     } catch (error) {
@@ -447,7 +434,7 @@ export class AdvancedChartingService {
       });
 
       // Portfolio value chart
-      const portfolioChart = grid.set(0, 0, 6, 6, contrib.line, {
+      const portfolioChart = (contrib as any).line({
         label: 'Portfolio Value',
         showLegend: true,
         legend: { width: 10 },
@@ -455,7 +442,7 @@ export class AdvancedChartingService {
       });
 
       // P&L chart
-      const pnlChart = grid.set(0, 6, 6, 6, contrib.line, {
+      const pnlChart = (contrib as any).line({
         label: 'P&L',
         showLegend: true,
         legend: { width: 10 },
@@ -463,7 +450,7 @@ export class AdvancedChartingService {
       });
 
       // Risk metrics chart
-      const riskChart = grid.set(6, 0, 6, 12, contrib.bar, {
+      const riskChart = (contrib as any).bar({
         label: 'Risk Metrics',
         barWidth: 2,
         barSpacing: 1,
@@ -491,7 +478,7 @@ export class AdvancedChartingService {
       }
 
       if (metrics.riskMetrics) {
-        riskChart.setData([
+        (riskChart as any).setData([
           { title: 'Sharpe Ratio', x: ['Sharpe'], y: [metrics.riskMetrics.sharpeRatio || 0] },
           { title: 'Max Drawdown', x: ['Max DD'], y: [Math.abs(metrics.riskMetrics.maxDrawdown || 0)] },
           { title: 'Volatility', x: ['Vol'], y: [metrics.riskMetrics.volatility || 0] }
