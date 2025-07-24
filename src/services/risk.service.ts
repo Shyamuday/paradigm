@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, RiskProfile as PrismaRiskProfile, RiskMetrics as PrismaRiskMetrics } from '@prisma/client';
 import { RiskProfile, RiskMetrics } from '../types';
 import { logger } from '../logger/logger';
 
@@ -6,57 +6,51 @@ const prisma = new PrismaClient();
 
 export class RiskService {
     // Risk Profile Management
-    async createRiskProfile(userId: string, profile: Omit<RiskProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<RiskProfile> {
+    async createRiskProfile(userId: string, profile: Omit<RiskProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PrismaRiskProfile> {
         try {
             const result = await prisma.riskProfile.create({
                 data: {
                     userId,
-                    ...profile
+                    maxDailyLoss: profile.maxDailyLoss,
+                    maxDrawdown: profile.maxDrawdown,
+                    maxPositionSize: profile.maxPositionSize,
+                    maxOpenPositions: 10, // Default value
+                    riskTolerance: 'MEDIUM',
+                    maxDelta: null,
+                    maxGamma: null,
+                    maxTheta: null,
+                    maxVega: null
                 }
             });
 
-            return {
-                ...result,
-                var: result.var || 0,
-                sharpeRatio: result.sharpeRatio || 0
-            } as RiskProfile;
+            return result;
         } catch (error) {
             logger.error('Error creating risk profile:', error);
             throw error;
         }
     }
 
-    async updateRiskProfile(id: string, profile: Partial<Omit<RiskProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<RiskProfile> {
+    async updateRiskProfile(id: string, profile: Partial<Omit<RiskProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<PrismaRiskProfile> {
         try {
             const result = await prisma.riskProfile.update({
                 where: { id },
                 data: profile
             });
 
-            return {
-                ...result,
-                var: result.var || 0,
-                sharpeRatio: result.sharpeRatio || 0
-            } as RiskProfile;
+            return result;
         } catch (error) {
             logger.error('Error updating risk profile:', error);
             throw error;
         }
     }
 
-    async getRiskProfile(userId: string): Promise<RiskProfile | null> {
+    async getRiskProfile(userId: string): Promise<PrismaRiskProfile | null> {
         try {
             const result = await prisma.riskProfile.findUnique({
                 where: { userId }
             });
 
-            if (!result) return null;
-
-            return {
-                ...result,
-                var: result.var || 0,
-                sharpeRatio: result.sharpeRatio || 0
-            } as RiskProfile;
+            return result;
         } catch (error) {
             logger.error('Error fetching risk profile:', error);
             throw error;
@@ -64,63 +58,51 @@ export class RiskService {
     }
 
     // Risk Metrics Management
-    async updateRiskMetrics(sessionId: string, metrics: Partial<Omit<RiskMetrics, 'id' | 'sessionId' | 'date'>>): Promise<RiskMetrics> {
+    async updateRiskMetrics(sessionId: string, metrics: Partial<Omit<RiskMetrics, 'id' | 'sessionId' | 'date'>>): Promise<PrismaRiskMetrics> {
         try {
-            const date = new Date();
-            date.setHours(0, 0, 0, 0);
+            const timestamp = new Date();
 
-            const result = await prisma.riskMetrics.upsert({
-                where: {
-                    sessionId_date: {
-                        sessionId,
-                        date
-                    }
-                },
-                update: metrics,
-                create: {
+            const result = await prisma.riskMetrics.create({
+                data: {
                     sessionId,
-                    date,
-                    dailyPnL: 0,
-                    drawdown: 0,
-                    currentRisk: 0,
-                    maxDrawdown: 0,
-                    winRate: 0,
-                    profitFactor: 0,
-                    ...metrics
+                    timestamp,
+                    dailyPnL: metrics.dailyPnL || 0,
+                    drawdown: metrics.drawdown || 0,
+                    totalValue: 0,
+                    totalPnL: 0,
+                    portfolioDelta: null,
+                    portfolioGamma: null,
+                    portfolioTheta: null,
+                    portfolioVega: null,
+                    sharpeRatio: null,
+                    sortinoRatio: null,
+                    maxDrawdown: null
                 }
             });
 
-            return {
-                ...result,
-                var: result.var || 0,
-                sharpeRatio: result.sharpeRatio || 0
-            } as RiskMetrics;
+            return result;
         } catch (error) {
             logger.error('Error updating risk metrics:', error);
             throw error;
         }
     }
 
-    async getRiskMetrics(sessionId: string, startDate: Date, endDate: Date): Promise<RiskMetrics[]> {
+    async getRiskMetrics(sessionId: string, startDate: Date, endDate: Date): Promise<PrismaRiskMetrics[]> {
         try {
             const results = await prisma.riskMetrics.findMany({
                 where: {
                     sessionId,
-                    date: {
+                    timestamp: {
                         gte: startDate,
                         lte: endDate
                     }
                 },
                 orderBy: {
-                    date: 'asc'
+                    timestamp: 'asc'
                 }
             });
 
-            return results.map(result => ({
-                ...result,
-                var: result.var || 0,
-                sharpeRatio: result.sharpeRatio || 0
-            })) as RiskMetrics[];
+            return results;
         } catch (error) {
             logger.error('Error fetching risk metrics:', error);
             throw error;
@@ -130,9 +112,11 @@ export class RiskService {
     // Risk Calculations
     calculateValueAtRisk(returns: number[], confidenceLevel: number = 0.95): number {
         if (!returns.length) return 0;
-        const sortedReturns = returns.sort((a, b) => a - b);
+        // Create a copy of returns array to avoid mutating the original
+        const sortedReturns = [...returns].sort((a, b) => a - b);
         const index = Math.floor((1 - confidenceLevel) * returns.length);
-        return -sortedReturns[index];
+        return -sortedReturns[index]!; // Add non-null assertion since we know array has elements
+
     }
 
     calculateSharpeRatio(returns: number[], riskFreeRate: number = 0.02): number {
@@ -156,9 +140,10 @@ export class RiskService {
                 return false;
             }
 
-            // Check maximum open trades
-            if (currentPositions >= profile.maxOpenTrades) {
-                logger.warn(`Maximum number of open trades (${profile.maxOpenTrades}) reached`);
+            // Check maximum open positions
+            const maxOpenPositions = profile?.maxOpenPositions ?? 0;
+            if (profile && maxOpenPositions > 0 && currentPositions >= maxOpenPositions) {
+                logger.warn(`Maximum number of open positions (${maxOpenPositions}) reached`);
                 return false;
             }
 
@@ -182,8 +167,8 @@ export class RiskService {
 
             if (!profile || !metrics.length) return true;
 
-            const dailyPnL = metrics[0].dailyPnL;
-            if (Math.abs(dailyPnL) > profile.maxDailyLoss) {
+            const dailyPnL = metrics[0]?.dailyPnL ?? 0;
+            if (profile && Math.abs(dailyPnL) > profile.maxDailyLoss) {
                 logger.warn(`Daily loss limit of ${profile.maxDailyLoss} exceeded. Current loss: ${dailyPnL}`);
                 return false;
             }

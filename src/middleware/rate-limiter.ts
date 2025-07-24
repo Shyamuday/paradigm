@@ -1,4 +1,5 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
+import { Request, Response } from 'express';
 import { logger } from '../logger/logger';
 
 // General API rate limiter
@@ -11,7 +12,7 @@ export const apiLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -34,7 +35,7 @@ export const authLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Auth rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -57,7 +58,7 @@ export const tradingLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Trading rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -80,7 +81,7 @@ export const marketDataLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Market data rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -103,7 +104,7 @@ export const webhookLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Webhook rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -126,7 +127,7 @@ export const uploadLimiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (req: Request, res: Response) => {
     logger.warn('Upload rate limit exceeded', {
       ip: req.ip,
       path: req.path,
@@ -145,7 +146,7 @@ export const createCustomLimiter = (
   max: number,
   message: string,
   retryAfter?: string
-) => {
+): RateLimitRequestHandler => {
   return rateLimit({
     windowMs,
     max,
@@ -155,7 +156,7 @@ export const createCustomLimiter = (
     },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
+    handler: (req: Request, res: Response) => {
       logger.warn('Custom rate limit exceeded', {
         ip: req.ip,
         path: req.path,
@@ -172,13 +173,13 @@ export const createCustomLimiter = (
 };
 
 // Rate limiter for specific user actions
-export const userActionLimiter = (action: string, max: number, windowMs: number = 60000) => {
+export const userActionLimiter = (action: string, max: number, windowMs: number = 60000): RateLimitRequestHandler => {
   return rateLimit({
     windowMs,
     max,
-    keyGenerator: (req) => {
+    keyGenerator: (req: Request) => {
       // Use user ID if available, otherwise use IP
-      return req.user?.id || req.ip;
+      return (req as any).user?.id || req.ip;
     },
     message: {
       error: `Too many ${action} attempts, please try again later.`,
@@ -186,9 +187,9 @@ export const userActionLimiter = (action: string, max: number, windowMs: number 
     },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
+    handler: (req: Request, res: Response) => {
       logger.warn(`User action rate limit exceeded: ${action}`, {
-        userId: req.user?.id,
+        userId: (req as any).user?.id,
         ip: req.ip,
         path: req.path,
         action

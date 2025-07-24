@@ -43,15 +43,15 @@ export class MathUtilsService {
 
       // Calculate skewness
       const skewness = this.calculateSkewness(data, mean, std);
-      
+
       // Calculate kurtosis
       const kurtosis = this.calculateKurtosis(data, mean, std);
 
-      logger.debug('Calculated statistics', { 
-        count: data.length, 
-        mean, 
-        std, 
-        range 
+      logger.debug('Calculated statistics', {
+        count: data.length,
+        mean,
+        std,
+        range
       });
 
       return {
@@ -76,12 +76,12 @@ export class MathUtilsService {
    */
   private calculateSkewness(data: number[], mean: number, std: number): number {
     if (std === 0) return 0;
-    
+
     const n = data.length;
     const sum = data.reduce((acc, val) => {
       return acc + Number(math.pow((val - mean) / std, 3));
     }, 0);
-    
+
     return (n / ((n - 1) * (n - 2))) * sum;
   }
 
@@ -90,12 +90,12 @@ export class MathUtilsService {
    */
   private calculateKurtosis(data: number[], mean: number, std: number): number {
     if (std === 0) return 0;
-    
+
     const n = data.length;
     const sum = data.reduce((acc, val) => {
       return acc + Number(math.pow((val - mean) / std, 4));
     }, 0);
-    
+
     return (n * (n + 1) / ((n - 1) * (n - 2) * (n - 3))) * sum - (3 * (n - 1) * (n - 1) / ((n - 2) * (n - 3)));
   }
 
@@ -142,10 +142,10 @@ export class MathUtilsService {
       const var95 = this.calculateVaR(returns, 0.05);
       const var99 = this.calculateVaR(returns, 0.01);
 
-      logger.debug('Calculated financial metrics', { 
-        sharpeRatio, 
-        maxDrawdown, 
-        volatility 
+      logger.debug('Calculated financial metrics', {
+        sharpeRatio,
+        maxDrawdown,
+        volatility
       });
 
       return {
@@ -168,20 +168,18 @@ export class MathUtilsService {
    */
   private calculateMaxDrawdown(cumulativeReturns: number[]): number {
     if (cumulativeReturns.length === 0) return 0;
-    
     let maxDrawdown = 0;
-    let peak = cumulativeReturns[0];
-
+    let peak = cumulativeReturns[0] ?? 0;
     for (const value of cumulativeReturns) {
-      if (value > peak) {
+      if (value !== undefined && value > peak) {
         peak = value;
       }
-      const drawdown = (peak - value) / peak;
+      if (peak === 0) continue;
+      const drawdown = (peak - (value ?? 0)) / peak;
       if (drawdown > maxDrawdown) {
         maxDrawdown = drawdown;
       }
     }
-
     return maxDrawdown;
   }
 
@@ -190,7 +188,7 @@ export class MathUtilsService {
    */
   private calculateVaR(returns: number[], confidenceLevel: number): number {
     if (returns.length === 0) return 0;
-    
+
     const sortedReturns = [...returns].sort((a, b) => a - b);
     const index = Math.floor(confidenceLevel * sortedReturns.length);
     return sortedReturns[index] || 0;
@@ -225,20 +223,15 @@ export class MathUtilsService {
   calculateEMA(data: number[], period: number): number[] {
     try {
       if (data.length === 0) return [];
-
       const multiplier = 2 / (period + 1);
       const result: number[] = [];
-      
-      // First EMA is SMA
-      let ema = data[0];
+      let ema = data[0] ?? 0;
       result.push(ema);
-
       for (let i = 1; i < data.length; i++) {
-        const currentValue = data[i];
+        const currentValue = data[i] ?? 0;
         ema = (currentValue * multiplier) + (ema * (1 - multiplier));
         result.push(ema);
       }
-
       logger.debug(`Calculated EMA`, { period, resultCount: result.length });
       return result;
     } catch (error) {
@@ -263,7 +256,7 @@ export class MathUtilsService {
       for (let i = 1; i < data.length; i++) {
         const currentValue = data[i];
         const prevValue = data[i - 1];
-        
+
         if (currentValue !== undefined && prevValue !== undefined) {
           const change = currentValue - prevValue;
           gains.push(change > 0 ? change : 0);
@@ -284,11 +277,11 @@ export class MathUtilsService {
       for (let i = period; i < gains.length; i++) {
         const currentGain = gains[i];
         const currentLoss = losses[i];
-        
+
         if (currentGain !== undefined && currentLoss !== undefined) {
           avgGain = (avgGain * (period - 1) + currentGain) / period;
           avgLoss = (avgLoss * (period - 1) + currentLoss) / period;
-          
+
           const rs = avgGain / avgLoss;
           const rsi = 100 - (100 / (1 + rs));
           result.push(rsi);
@@ -324,7 +317,7 @@ export class MathUtilsService {
       for (let i = 0; i < slowEMA.length; i++) {
         const fastValue = fastEMA[i];
         const slowValue = slowEMA[i];
-        
+
         if (fastValue !== undefined && slowValue !== undefined) {
           const macdValue = fastValue - slowValue;
           macd.push(macdValue);
@@ -340,18 +333,18 @@ export class MathUtilsService {
       for (let i = 0; i < signalLength; i++) {
         const macdValue = macd[macd.length - signalLength + i];
         const signalValue = signal[i];
-        
+
         if (macdValue !== undefined && signalValue !== undefined) {
           const histValue = macdValue - signalValue;
           histogram.push(histValue);
         }
       }
 
-      logger.debug(`Calculated MACD`, { 
-        fastPeriod, 
-        slowPeriod, 
-        signalPeriod, 
-        resultCount: macd.length 
+      logger.debug(`Calculated MACD`, {
+        fastPeriod,
+        slowPeriod,
+        signalPeriod,
+        resultCount: macd.length
       });
 
       return { macd, signal, histogram };
@@ -383,24 +376,24 @@ export class MathUtilsService {
         const startIndex = i;
         const endIndex = startIndex + period;
         const slice = data.slice(startIndex, endIndex);
-        
+
         const std = Number(math.std(slice));
         const smaValue = sma[i];
-        
+
         if (smaValue !== undefined) {
           const upperBand = smaValue + (stdDev * std);
           const lowerBand = smaValue - (stdDev * std);
-          
+
           upper.push(upperBand);
           middle.push(smaValue);
           lower.push(lowerBand);
         }
       }
 
-      logger.debug(`Calculated Bollinger Bands`, { 
-        period, 
-        stdDev, 
-        resultCount: upper.length 
+      logger.debug(`Calculated Bollinger Bands`, {
+        period,
+        stdDev,
+        resultCount: upper.length
       });
 
       return { upper, middle, lower };
@@ -431,7 +424,7 @@ export class MathUtilsService {
 
       const numerator = n * sumXY - sumX * sumY;
       const denominator = Number(math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY)));
-      
+
       return denominator !== 0 ? numerator / denominator : 0;
     } catch (error) {
       logger.error('Error calculating correlation', error);

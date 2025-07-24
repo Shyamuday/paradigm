@@ -4,10 +4,9 @@ import { logger } from '../logger/logger';
 export interface CacheConfig {
   host: string;
   port: number;
-  password?: string;
+  password: string;
   db?: number;
   keyPrefix?: string;
-  retryDelayOnFailover?: number;
   maxRetriesPerRequest?: number;
   lazyConnect?: boolean;
 }
@@ -23,20 +22,22 @@ export class CacheService {
   private defaultTTL = 3600; // 1 hour default
 
   constructor(config: CacheConfig) {
-    this.redis = new Redis({
+    const redisOptions: any = {
       host: config.host || 'localhost',
       port: config.port || 6379,
-      password: config.password,
       db: config.db || 0,
       keyPrefix: config.keyPrefix || 'trading_bot:',
-      retryDelayOnFailover: config.retryDelayOnFailover || 100,
       maxRetriesPerRequest: config.maxRetriesPerRequest || 3,
       lazyConnect: config.lazyConnect || true,
-      retryStrategy: (times) => {
+      retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
       }
-    });
+    };
+    if (config.password) {
+      redisOptions.password = config.password;
+    }
+    this.redis = new Redis(redisOptions);
 
     this.setupEventHandlers();
   }
@@ -80,7 +81,7 @@ export class CacheService {
       const ttl = options.ttl || this.defaultTTL;
 
       await this.redis.setex(fullKey, ttl, serializedValue);
-      
+
       logger.debug('Cache set', { key: fullKey, ttl });
     } catch (error) {
       logger.error('Cache set error', { key, error });
@@ -125,7 +126,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.del(fullKey);
-      
+
       logger.debug('Cache delete', { key: fullKey, deleted: result > 0 });
       return result > 0;
     } catch (error) {
@@ -145,7 +146,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.exists(fullKey);
-      
+
       return result === 1;
     } catch (error) {
       logger.error('Cache exists error', { key, error });
@@ -164,7 +165,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.expire(fullKey, ttl);
-      
+
       logger.debug('Cache expire', { key: fullKey, ttl, success: result === 1 });
       return result === 1;
     } catch (error) {
@@ -184,7 +185,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.ttl(fullKey);
-      
+
       return result;
     } catch (error) {
       logger.error('Cache TTL error', { key, error });
@@ -203,7 +204,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.incrby(fullKey, amount);
-      
+
       logger.debug('Cache increment', { key: fullKey, amount, result });
       return result;
     } catch (error) {
@@ -223,7 +224,7 @@ export class CacheService {
 
       const fullKey = this.buildKey(key, options.prefix);
       const result = await this.redis.decrby(fullKey, amount);
-      
+
       logger.debug('Cache decrement', { key: fullKey, amount, result });
       return result;
     } catch (error) {
@@ -298,7 +299,7 @@ export class CacheService {
 
       const fullKeys = keys.map(key => this.buildKey(key, options.prefix));
       const result = await this.redis.del(...fullKeys);
-      
+
       logger.debug('Cache mdelete', { keys: fullKeys, deleted: result });
       return result;
     } catch (error) {
@@ -318,7 +319,7 @@ export class CacheService {
 
       const fullPattern = this.buildKey(pattern);
       const keys = await this.redis.keys(fullPattern);
-      
+
       logger.debug('Cache keys', { pattern: fullPattern, count: keys.length });
       return keys;
     } catch (error) {
@@ -340,7 +341,7 @@ export class CacheService {
       if (keys.length > 0) {
         await this.redis.del(...keys);
       }
-      
+
       logger.info('Cache cleared', { deletedKeys: keys.length });
     } catch (error) {
       logger.error('Cache clear error', { error });
@@ -369,14 +370,14 @@ export class CacheService {
 
       const [totalKeys, memoryUsage, info] = await Promise.all([
         this.redis.dbsize(),
-        this.redis.memory('USAGE'),
+        this.redis.memory('STATS'),
         this.redis.info()
       ]);
 
       return {
         connected: true,
         totalKeys,
-        memoryUsage: memoryUsage.toString(),
+        memoryUsage: memoryUsage ? memoryUsage.toString() : '0',
         info: this.parseRedisInfo(info)
       };
     } catch (error) {
@@ -408,9 +409,11 @@ export class CacheService {
     const result: Record<string, any> = {};
 
     for (const line of lines) {
-      if (line.includes(':')) {
+      if (line && typeof line === 'string' && line.includes(':')) {
         const [key, value] = line.split(':');
-        result[key] = value;
+        if (key !== undefined) {
+          result[key] = value;
+        }
       }
     }
 
@@ -463,10 +466,9 @@ export const cachePrefixes = {
 export const defaultCacheConfig: CacheConfig = {
   host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6379'),
-  password: process.env.REDIS_PASSWORD,
+  password: process.env.REDIS_PASSWORD || '',
   db: parseInt(process.env.REDIS_DB || '0'),
   keyPrefix: 'trading_bot:',
-  retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true
 };

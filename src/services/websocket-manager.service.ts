@@ -2,7 +2,7 @@ import { KiteConnect } from 'kiteconnect';
 import { EventEmitter } from 'events';
 import { logger } from '../logger/logger';
 
-interface TickData {
+export type TickData = {
     instrumentToken: number;
     lastPrice: number;
     volume: number;
@@ -15,7 +15,7 @@ interface TickData {
     lowPrice: number;
     closePrice: number;
     change: number;
-}
+};
 
 export class WebSocketManager extends EventEmitter {
     private ws: any; // KiteTicker instance

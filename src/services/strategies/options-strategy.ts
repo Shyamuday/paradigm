@@ -1,4 +1,5 @@
 import { BaseStrategy } from '../strategy-engine.service';
+import { logger } from '../../logger/logger';
 import {
     StrategyConfig,
     TradeSignal,
@@ -58,13 +59,13 @@ export class OptionsStrategy extends BaseStrategy {
     constructor() {
         super(
             'Options Strategy',
-            'OPTIONS_STRATEGY',
+            'OPTIONS',
             '1.0.0',
             'Comprehensive options trading strategy for various market conditions'
         );
     }
 
-    async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
+    async generateSignals(marketData: any[]): Promise<any[]> {
         const signals: TradeSignal[] = [];
 
         const strategyType = this.config.parameters.strategyType || 'COVERED_CALL';
@@ -101,10 +102,16 @@ export class OptionsStrategy extends BaseStrategy {
                 logger.warn(`Unknown options strategy type: ${strategyType}`);
         }
 
-        return signals;
+        // Convert to base class expected format
+        return signals.map(signal => ({
+            ...signal,
+            side: signal.action === 'BUY' ? 'LONG' : 'SHORT',
+            confidence: 0.7,
+            strategyName: this.name
+        }));
     }
 
-    async shouldExit(position: Position, marketData: MarketData[]): Promise<boolean> {
+    async shouldExit(position: Position, marketData: any[]): Promise<boolean> {
         const optionsPosition = this.optionsPositions.get(position.id);
         if (!optionsPosition) return false;
 
@@ -112,7 +119,9 @@ export class OptionsStrategy extends BaseStrategy {
         if (!currentPrice) return false;
 
         // Check time decay (theta)
-        const daysToExpiry = this.calculateDaysToExpiry(optionsPosition.contracts[0]?.expiry);
+        const expiry = optionsPosition.contracts[0]?.expiry;
+        if (!expiry) return false;
+        const daysToExpiry = this.calculateDaysToExpiry(expiry);
         if (daysToExpiry <= 5 && optionsPosition.netTheta < -0.1) {
             return true; // Exit if high time decay and close to expiry
         }
@@ -149,7 +158,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
         // Find optimal strike for covered call
@@ -195,7 +204,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
         // Find optimal strike for protective put
@@ -241,7 +250,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 45;
 
         // Calculate iron condor strikes
@@ -286,7 +295,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
         // Calculate butterfly spread strikes
@@ -331,7 +340,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
         // Check if volatility is expected to increase
@@ -375,7 +384,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
         // Calculate strangle strikes
@@ -424,7 +433,7 @@ export class OptionsStrategy extends BaseStrategy {
         const isBullish = this.detectBullishTrend(marketData);
 
         if (isBullish) {
-            const volatility = this.calculateVolatility(marketData);
+            const volatility = this.calculateOptionsVolatility(marketData);
             const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
             const bullCallStrikes = this.calculateBullCallSpreadStrikes(
@@ -473,7 +482,7 @@ export class OptionsStrategy extends BaseStrategy {
         const isBearish = this.detectBearishTrend(marketData);
 
         if (isBearish) {
-            const volatility = this.calculateVolatility(marketData);
+            const volatility = this.calculateOptionsVolatility(marketData);
             const daysToExpiry = this.config.parameters.daysToExpiry || 30;
 
             const bearPutStrikes = this.calculateBearPutSpreadStrikes(
@@ -518,7 +527,7 @@ export class OptionsStrategy extends BaseStrategy {
         const underlyingPrice = currentData.close || currentData.ltp;
         if (!underlyingPrice) return signals;
 
-        const volatility = this.calculateVolatility(marketData);
+        const volatility = this.calculateOptionsVolatility(marketData);
         const shortExpiry = this.config.parameters.shortExpiry || 30;
         const longExpiry = this.config.parameters.longExpiry || 60;
 
@@ -678,37 +687,33 @@ export class OptionsStrategy extends BaseStrategy {
     private detectVolatilityExpansion(marketData: MarketData[]): boolean {
         if (marketData.length < 20) return false;
 
-        const recentVolatility = this.calculateVolatility(marketData.slice(-10));
-        const historicalVolatility = this.calculateVolatility(marketData.slice(-20, -10));
+        const recentVolatility = this.calculateOptionsVolatility(marketData.slice(-10));
+        const historicalVolatility = this.calculateOptionsVolatility(marketData.slice(-20, -10));
 
         return recentVolatility > historicalVolatility * 1.2; // 20% increase
     }
 
-    private detectBullishTrend(marketData: MarketData[]): boolean {
-        if (marketData.length < 20) return false;
+    private detectBullishTrend(marketData: any[]): boolean {
+        const sma20 = this.calculateSMA(marketData, 20);
+        const sma50 = this.calculateSMA(marketData, 50);
 
-        const shortMA = this.calculateSMA(marketData, 10);
-        const longMA = this.calculateSMA(marketData, 20);
+        const currentSMA20 = sma20[sma20.length - 1] ?? 0;
+        const currentSMA50 = sma50[sma50.length - 1] ?? 0;
 
-        const currentShortMA = shortMA[shortMA.length - 1];
-        const currentLongMA = longMA[longMA.length - 1];
-
-        return currentShortMA && currentLongMA && currentShortMA > currentLongMA;
+        return currentSMA20 > currentSMA50 && currentSMA20 > 0;
     }
 
-    private detectBearishTrend(marketData: MarketData[]): boolean {
-        if (marketData.length < 20) return false;
+    private detectBearishTrend(marketData: any[]): boolean {
+        const sma20 = this.calculateSMA(marketData, 20);
+        const sma50 = this.calculateSMA(marketData, 50);
 
-        const shortMA = this.calculateSMA(marketData, 10);
-        const longMA = this.calculateSMA(marketData, 20);
+        const currentSMA20 = sma20[sma20.length - 1] ?? 0;
+        const currentSMA50 = sma50[sma50.length - 1] ?? 0;
 
-        const currentShortMA = shortMA[shortMA.length - 1];
-        const currentLongMA = longMA[longMA.length - 1];
-
-        return currentShortMA && currentLongMA && currentShortMA < currentLongMA;
+        return currentSMA20 < currentSMA50 && currentSMA20 > 0;
     }
 
-    private calculateVolatility(marketData: MarketData[]): number {
+    private calculateOptionsVolatility(marketData: any[]): number {
         if (marketData.length < 2) return 0;
 
         const returns = [];
@@ -788,22 +793,24 @@ export class OptionsStrategy extends BaseStrategy {
         };
     }
 
-    validateConfig(config: StrategyConfig): boolean {
-        const baseValid = super.validateConfig(config);
-        if (!baseValid) return false;
-
-        // Validate options strategy specific parameters
-        const { strategyType, daysToExpiry, volatilityThreshold } = config.parameters;
-
-        if (!strategyType) {
+    validateConfig(config: any): boolean {
+        // Call parent validation
+        if (!super.validateConfig(config)) {
             return false;
         }
 
-        if (daysToExpiry && (daysToExpiry < 1 || daysToExpiry > 365)) {
+        // Options-specific validation
+        const { minStrikeDistance, maxDaysToExpiry, minVolatility } = config.parameters || {};
+
+        if (typeof minStrikeDistance === 'number' && (minStrikeDistance < 0.5 || minStrikeDistance > 10)) {
             return false;
         }
 
-        if (volatilityThreshold && (volatilityThreshold < 0 || volatilityThreshold > 1)) {
+        if (typeof maxDaysToExpiry === 'number' && (maxDaysToExpiry < 1 || maxDaysToExpiry > 365)) {
+            return false;
+        }
+
+        if (typeof minVolatility === 'number' && (minVolatility < 0.1 || minVolatility > 2)) {
             return false;
         }
 

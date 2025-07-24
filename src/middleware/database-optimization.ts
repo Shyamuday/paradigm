@@ -59,12 +59,12 @@ export class DatabaseOptimizationMiddleware {
   monitorQueryPerformance = (req: Request, res: Response, next: NextFunction): void => {
     const startTime = Date.now();
     const config = this.config;
-    
+
     // Override res.end to capture response time
     const originalEnd = res.end;
-    res.end = function(chunk?: any, encoding?: any, cb?: () => void) {
+    res.end = function (chunk?: any, encoding?: any, cb?: () => void) {
       const executionTime = Date.now() - startTime;
-      
+
       if (executionTime > (config.slowQueryThreshold || 1000)) {
         logger.warn('Slow API endpoint detected:', {
           method: req.method,
@@ -73,10 +73,10 @@ export class DatabaseOptimizationMiddleware {
           timestamp: new Date()
         });
       }
-      
+
       return originalEnd.call(this, chunk, encoding, cb);
     };
-    
+
     next();
   };
 
@@ -100,7 +100,7 @@ export class DatabaseOptimizationMiddleware {
   checkDatabaseHealth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const stats = await this.optimizationService.getDatabaseStats();
-      
+
       // Check for critical issues
       if (stats.avgQueryTime > 2000) {
         logger.error('Critical: High average query time detected');
@@ -111,11 +111,11 @@ export class DatabaseOptimizationMiddleware {
         });
         return;
       }
-      
+
       if (stats.cacheHitRatio < 50) {
         logger.warn('Warning: Low cache hit ratio detected');
       }
-      
+
       next();
     } catch (error) {
       logger.error('Database health check failed:', error);
@@ -134,31 +134,31 @@ export class DatabaseOptimizationMiddleware {
     return {
       // Get database statistics
       'GET /api/database/stats': this.getDatabaseStats.bind(this),
-      
+
       // Get slow queries
       'GET /api/database/slow-queries': this.getSlowQueries.bind(this),
-      
+
       // Get query trends
       'GET /api/database/query-trends': this.getQueryTrends.bind(this),
-      
+
       // Analyze query performance
       'POST /api/database/analyze-query': this.analyzeQuery.bind(this),
-      
+
       // Create indexes
       'POST /api/database/create-indexes': this.createIndexes.bind(this),
-      
+
       // Optimize database configuration
       'POST /api/database/optimize-config': this.optimizeConfig.bind(this),
-      
+
       // Get optimization recommendations
       'GET /api/database/recommendations': this.getRecommendations.bind(this),
-      
+
       // Start/stop monitoring
       'POST /api/database/monitoring': this.toggleMonitoring.bind(this),
-      
+
       // Clean up old metrics
       'POST /api/database/cleanup': this.cleanupMetrics.bind(this),
-      
+
       // Export query metrics
       'GET /api/database/export-metrics': this.exportMetrics.bind(this)
     };
@@ -192,7 +192,7 @@ export class DatabaseOptimizationMiddleware {
     try {
       const limit = parseInt(req.query.limit as string) || 10;
       const slowQueries = this.optimizationService.getSlowQueries(limit);
-      
+
       res.json({
         success: true,
         data: slowQueries,
@@ -216,7 +216,7 @@ export class DatabaseOptimizationMiddleware {
     try {
       const hours = parseInt(req.query.hours as string) || 24;
       const trends = this.optimizationService.getQueryTrends(hours);
-      
+
       res.json({
         success: true,
         data: trends,
@@ -239,16 +239,17 @@ export class DatabaseOptimizationMiddleware {
   private async analyzeQuery(req: Request, res: Response): Promise<void> {
     try {
       const { query } = req.body;
-      
+
       if (!query) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Query is required'
         });
+        return;
       }
 
       const recommendations = await this.optimizationService.analyzeQueryPerformance(query);
-      
+
       res.json({
         success: true,
         data: {
@@ -274,16 +275,17 @@ export class DatabaseOptimizationMiddleware {
   private async createIndexes(req: Request, res: Response): Promise<void> {
     try {
       const { indexes } = req.body;
-      
+
       if (!Array.isArray(indexes)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Indexes array is required'
         });
+        return;
       }
 
       await this.optimizationService.createIndexes(indexes as IndexConfig[]);
-      
+
       res.json({
         success: true,
         message: `Created ${indexes.length} indexes successfully`,
@@ -305,7 +307,7 @@ export class DatabaseOptimizationMiddleware {
   private async optimizeConfig(req: Request, res: Response): Promise<void> {
     try {
       await this.optimizationService.optimizeDatabaseConfig();
-      
+
       res.json({
         success: true,
         message: 'Database configuration optimized successfully',
@@ -339,11 +341,11 @@ export class DatabaseOptimizationMiddleware {
           const queryRecommendations = await this.optimizationService.analyzeQueryPerformance(slowQuery.query);
           recommendations.push(...queryRecommendations);
         }
-        
+
         // Remove duplicates and sort by priority
         recommendations = this.removeDuplicateRecommendations(recommendations);
       }
-      
+
       res.json({
         success: true,
         data: recommendations,
@@ -366,7 +368,7 @@ export class DatabaseOptimizationMiddleware {
   private async toggleMonitoring(req: Request, res: Response): Promise<void> {
     try {
       const { action, interval } = req.body;
-      
+
       if (action === 'start') {
         this.optimizationService.startOptimizationMonitoring(interval || 60);
         res.json({
@@ -405,7 +407,7 @@ export class DatabaseOptimizationMiddleware {
     try {
       const { daysToKeep } = req.body;
       this.optimizationService.cleanupOldMetrics(daysToKeep || 7);
-      
+
       res.json({
         success: true,
         message: `Cleaned up metrics older than ${daysToKeep || 7} days`,
@@ -427,10 +429,10 @@ export class DatabaseOptimizationMiddleware {
   private async exportMetrics(req: Request, res: Response): Promise<void> {
     try {
       const metrics = this.optimizationService.exportQueryMetrics();
-      
+
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', 'attachment; filename="query-metrics.json"');
-      
+
       res.json({
         success: true,
         data: metrics,

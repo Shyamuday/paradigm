@@ -98,12 +98,12 @@ export class PortfolioService {
                     ...dbPos,
                     currentPrice: zPos.last_price,
                     value: zPos.value,
-                    unrealizedPnL: zPos.unrealised,
-                    realizedPnL: zPos.realised,
+                    unrealizedPnL: zPos.unrealised ?? 0,
+                    realizedPnL: zPos.realised ?? 0,
                     quantity: zPos.quantity,
                     averagePrice: zPos.average_price,
-                    dayChange: zPos.day_change,
-                    dayChangePercent: zPos.day_change_percentage
+                    dayChange: 0, // Not available in KitePosition
+                    dayChangePercent: 0 // Not available in KitePosition
                 });
             } else {
                 // Create new position entry
@@ -116,17 +116,28 @@ export class PortfolioService {
 
                 if (instrument) {
                     mergedPositions.push({
+                        id: `temp_${Date.now()}`,
+                        sessionId: '', // Will be set properly
                         instrumentId: instrument.id,
-                        instrument,
+                        tradeId: null,
                         quantity: zPos.quantity,
                         averagePrice: zPos.average_price,
                         currentPrice: zPos.last_price,
+                        unrealizedPnL: zPos.unrealised ?? 0,
+                        realizedPnL: zPos.realised ?? 0,
+                        side: zPos.quantity > 0 ? 'LONG' : 'SHORT',
+                        stopLoss: null,
+                        target: null,
+                        trailingStop: false,
+                        openTime: null,
+                        closeTime: null,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        instrument,
+                        weight: 0, // Will be calculated later
                         value: zPos.value,
-                        unrealizedPnL: zPos.unrealised,
-                        realizedPnL: zPos.realised,
-                        dayChange: zPos.day_change,
-                        dayChangePercent: zPos.day_change_percentage,
-                        weight: 0 // Will be calculated later
+                        dayChange: 0, // Not available in KitePosition
+                        dayChangePercent: 0 // Not available in KitePosition
                     });
                 }
             }
@@ -176,10 +187,10 @@ export class PortfolioService {
                     ...pos,
                     currentPrice,
                     value,
-                    unrealizedPnL: zPos?.unrealised || zHolding?.pnl || pos.unrealizedPnL,
-                    realizedPnL: zPos?.realised || pos.realizedPnL,
-                    dayChange: zPos?.day_change || zHolding?.day_change || 0,
-                    dayChangePercent: zPos?.day_change_percentage || zHolding?.day_change_percentage || 0,
+                    unrealizedPnL: (zPos?.unrealised ?? zHolding?.pnl ?? pos.unrealizedPnL) ?? 0,
+                    realizedPnL: (zPos?.realised ?? pos.realizedPnL) ?? 0,
+                    dayChange: 0, // Not available in KitePosition/KiteHolding
+                    dayChangePercent: 0, // Not available in KitePosition/KiteHolding
                     weight: 0 // Will be calculated after all positions are processed
                 };
             }));

@@ -20,7 +20,7 @@ describe('Basic Trading Bot Features', () => {
     it('should calculate moving averages correctly', () => {
       const prices = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28];
       const sma5 = mathUtils.calculateMovingAverage(prices, 5);
-      
+
       expect(sma5).toHaveLength(6);
       expect(sma5[0]).toBeCloseTo(14, 2); // Average of first 5 values
       expect(sma5[5]).toBeCloseTo(24, 2); // Average of last 5 values
@@ -28,8 +28,8 @@ describe('Basic Trading Bot Features', () => {
 
     it('should calculate RSI correctly', () => {
       const prices = [44, 44.34, 44.09, 44.15, 43.61, 44.33, 44.23, 44.23, 44.56, 44.15];
-      const rsi = mathUtils.calculateRSI(prices, 14);
-      
+      // RSI period should not exceed prices.length
+      const rsi = mathUtils.calculateRSI(prices, 9);
       expect(rsi).toHaveLength(prices.length);
       expect(rsi[0]).toBeGreaterThanOrEqual(0);
       expect(rsi[0]).toBeLessThanOrEqual(100);
@@ -38,7 +38,7 @@ describe('Basic Trading Bot Features', () => {
     it('should calculate MACD correctly', () => {
       const prices = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40];
       const macd = mathUtils.calculateMACD(prices);
-      
+
       expect(macd.macd).toHaveLength(prices.length);
       expect(macd.signal).toHaveLength(prices.length);
       expect(macd.histogram).toHaveLength(prices.length);
@@ -47,11 +47,11 @@ describe('Basic Trading Bot Features', () => {
     it('should calculate Bollinger Bands correctly', () => {
       const prices = [10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48];
       const bb = mathUtils.calculateBollingerBands(prices, 20, 2);
-      
+
       expect(bb.upper).toHaveLength(prices.length);
       expect(bb.middle).toHaveLength(prices.length);
       expect(bb.lower).toHaveLength(prices.length);
-      
+
       // Check that arrays have values
       expect(bb.upper[bb.upper.length - 1]).toBeDefined();
       expect(bb.middle[bb.middle.length - 1]).toBeDefined();
@@ -61,7 +61,7 @@ describe('Basic Trading Bot Features', () => {
     it('should calculate statistics correctly', () => {
       const data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
       const stats = mathUtils.calculateStatistics(data);
-      
+
       expect(stats.mean).toBe(5.5);
       expect(stats.median).toBe(5.5);
       expect(stats.std).toBeCloseTo(3.027, 3);
@@ -72,7 +72,6 @@ describe('Basic Trading Bot Features', () => {
       // Test with empty array
       expect(() => mathUtils.calculateMovingAverage([], 5)).toThrow();
       expect(() => mathUtils.calculateRSI([], 14)).toThrow();
-      
       // Test with insufficient data
       expect(() => mathUtils.calculateMovingAverage([1, 2], 5)).toThrow();
     });
@@ -90,7 +89,7 @@ describe('Basic Trading Bot Features', () => {
       }));
 
       const features = mlService.extractFeatures(marketData);
-      
+
       expect(features).toBeDefined();
       expect(features.price_change).toBeDefined();
       expect(features.rsi).toBeDefined();
@@ -104,9 +103,9 @@ describe('Basic Trading Bot Features', () => {
       const features = [0.1, 0.2, 0.3];
       const target = 1;
       const timestamp = new Date();
-      
+
       mlService.addTrainingData(symbol, features, target, timestamp);
-      
+
       const trainingData = mlService.getTrainingData(symbol);
       expect(trainingData).toBeDefined();
       expect(trainingData?.features.length).toBeGreaterThan(0);
@@ -114,7 +113,7 @@ describe('Basic Trading Bot Features', () => {
 
     it('should train linear model', async () => {
       const symbol = 'TRAIN_TEST';
-      
+
       // Generate training data
       const trainingData = {
         features: Array.from({ length: 100 }, () => [Math.random(), Math.random(), Math.random()]),
@@ -122,9 +121,9 @@ describe('Basic Trading Bot Features', () => {
         timestamps: Array.from({ length: 100 }, (_, i) => new Date(Date.now() - (100 - i) * 60000)),
         symbols: Array(100).fill(symbol)
       };
-      
+
       const model = await mlService.trainLinearModel(symbol, trainingData);
-      
+
       expect(model).toBeDefined();
       expect(model.id).toContain(symbol);
       expect(model.accuracy).toBeGreaterThan(0);
@@ -142,7 +141,7 @@ describe('Basic Trading Bot Features', () => {
     it('should initialize with default config', () => {
       const engine = advancedTradingEngine;
       const status = engine.getStatus();
-      
+
       expect(status).toBeDefined();
       expect(status.isRunning).toBeDefined();
       expect(status.positions).toBeDefined();
@@ -191,7 +190,7 @@ describe('Basic Trading Bot Features', () => {
 
       // Extract features using ML service
       const features = mlService.extractFeatures(marketData);
-      
+
       // Verify features are reasonable
       expect(features.price_change).toBeGreaterThan(-1);
       expect(features.price_change).toBeLessThan(1);
@@ -211,7 +210,6 @@ describe('Basic Trading Bot Features', () => {
         source: 'manual' as const,
         metadata: { test: true }
       };
-      
       // This should not throw an error
       await expect(advancedTradingEngine.processSignal(signal)).resolves.not.toThrow();
     });
@@ -220,7 +218,7 @@ describe('Basic Trading Bot Features', () => {
   describe('Performance Tests', () => {
     it('should process large datasets efficiently', () => {
       const startTime = Date.now();
-      
+
       const marketData = Array.from({ length: 1000 }, (_, i) => ({
         timestamp: Date.now() - (1000 - i) * 60000,
         open: 100 + i * 0.01,
@@ -229,34 +227,34 @@ describe('Basic Trading Bot Features', () => {
         close: 100 + i * 0.01,
         volume: 1000000 + i * 100
       }));
-      
+
       const features = mlService.extractFeatures(marketData);
       const endTime = Date.now();
-      
+
       expect(features).toBeDefined();
       expect(endTime - startTime).toBeLessThan(2000); // Should complete in under 2 seconds
     });
 
     it('should handle multiple calculations efficiently', () => {
       const prices = Array.from({ length: 100 }, (_, i) => 100 + i * 0.1);
-      
+
       const startTime = Date.now();
-      
+
       // Run multiple calculations
       const sma = mathUtils.calculateMovingAverage(prices, 20);
       const rsi = mathUtils.calculateRSI(prices, 14);
       const macd = mathUtils.calculateMACD(prices);
       const bb = mathUtils.calculateBollingerBands(prices, 20, 2);
       const stats = mathUtils.calculateStatistics(prices);
-      
+
       const endTime = Date.now();
-      
+
       expect(sma.length).toBeGreaterThan(0);
       expect(rsi.length).toBeGreaterThan(0);
       expect(macd.macd.length).toBeGreaterThan(0);
       expect(bb.upper.length).toBeGreaterThan(0);
       expect(stats.mean).toBeDefined();
-      
+
       expect(endTime - startTime).toBeLessThan(1000); // Should complete in under 1 second
     });
   });
