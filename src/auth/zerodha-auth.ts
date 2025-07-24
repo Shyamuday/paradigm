@@ -2,7 +2,7 @@ import { KiteConnect } from 'kiteconnect';
 import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
-import open from 'open';
+const open = require('open');
 import { logger } from '../logger/logger';
 import {
     SessionDataSchema,
@@ -85,10 +85,10 @@ export class ZerodhaAuth {
 
                     // Generate session with validation
                     const sessionResponse = await this.kite.generateSession(requestToken, this.apiSecret);
-                    
+
                     // Validate the response using Zod
                     const validatedSession = ZerodhaLoginResponseSchema.parse(sessionResponse);
-                    
+
                     if (validatedSession.status === 'error' || !validatedSession.data) {
                         throw new Error(validatedSession.message || 'Login failed');
                     }
@@ -166,10 +166,10 @@ export class ZerodhaAuth {
 
             // Verify token by getting profile with validation
             const profileResponse = await this.kite.getProfile();
-            
+
             // Validate the profile response using Zod
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
-            
+
             if (validatedProfile.status === 'error' || !validatedProfile.data) {
                 throw new Error(validatedProfile.message || 'Token validation failed');
             }
@@ -228,10 +228,10 @@ export class ZerodhaAuth {
             // Set the access token and test it
             this.kite.setAccessToken(sessionData.access_token);
             const profileResponse = await this.kite.getProfile();
-            
+
             // Validate the profile response
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
-            
+
             if (validatedProfile.status === 'error' || !validatedProfile.data) {
                 logger.warn('Session validation failed:', validatedProfile.message);
                 return false;

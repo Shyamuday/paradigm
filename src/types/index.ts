@@ -39,7 +39,7 @@ export interface CandleData {
 export interface TimeframeConfig {
   id: string;
   name: string; // 1min, 3min, 5min, 15min, 30min, 1hour, 1day
-  description?: string;
+  description?: string | null;
   intervalMinutes: number;
   isActive: boolean;
   createdAt: Date;
@@ -145,8 +145,8 @@ export interface TradeSignal {
   action: 'BUY' | 'SELL' | 'HOLD';
   quantity: number;
   price: number;
-  stopLoss?: number;
-  target?: number;
+  stopLoss?: number | undefined;
+  target?: number | undefined;
   timestamp: Date;
   metadata?: TradeSignalMetadata;
 }

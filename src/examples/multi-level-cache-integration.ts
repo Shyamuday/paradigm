@@ -16,7 +16,7 @@ export class MultiLevelCacheExample {
 
   constructor() {
     this.prisma = new PrismaClient();
-    
+
     // Configure multi-level cache
     const cacheConfig: MultiLevelCacheConfig = {
       l1: {
@@ -41,7 +41,7 @@ export class MultiLevelCacheExample {
       redis: {
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
+        ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
         db: 0
       },
       prisma: this.prisma,
@@ -249,7 +249,7 @@ export class MultiLevelCacheExample {
         totalMisses += stat.misses;
       }
 
-      const overallHitRate = totalHits + totalMisses > 0 ? 
+      const overallHitRate = totalHits + totalMisses > 0 ?
         (totalHits / (totalHits + totalMisses)) * 100 : 0;
 
       logger.info(`📊 Overall hit rate: ${overallHitRate.toFixed(2)}%`);
@@ -365,7 +365,7 @@ export class MultiLevelCacheExample {
     try {
       // Simulate real-time market data updates
       const symbols = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICIBANK'];
-      
+
       for (let i = 0; i < 5; i++) {
         for (const symbol of symbols) {
           const marketData = {
@@ -477,9 +477,9 @@ export class MultiLevelCacheExample {
 
       for (const [level, stat] of stats) {
         const levelHealth = {
-          status: stat.hitRate > 70 ? 'excellent' : 
-                  stat.hitRate > 50 ? 'good' : 
-                  stat.hitRate > 30 ? 'fair' : 'poor',
+          status: stat.hitRate > 70 ? 'excellent' :
+            stat.hitRate > 50 ? 'good' :
+              stat.hitRate > 30 ? 'fair' : 'poor',
           hitRate: stat.hitRate,
           size: stat.size,
           maxSize: stat.maxSize,
@@ -520,11 +520,11 @@ export class MultiLevelCacheExample {
    */
   async cleanup(): Promise<void> {
     logger.info('Cleaning up multi-level cache resources...');
-    
+
     try {
       await this.middleware.dispose();
       await this.prisma.$disconnect();
-      
+
       logger.info('✅ Multi-level cache cleanup completed');
     } catch (error) {
       logger.error('❌ Cleanup failed:', error);
@@ -538,40 +538,40 @@ export class MultiLevelCacheExample {
  */
 export async function runMultiLevelCacheExample(): Promise<void> {
   const example = new MultiLevelCacheExample();
-  
+
   try {
     logger.info('🚀 Starting Multi-Level Cache Example');
-    
+
     // Basic operations
     await example.demonstrateBasicOperations();
-    
+
     // Trading-specific caching
     await example.demonstrateTradingCaching();
-    
+
     // Cache invalidation
     await example.demonstrateCacheInvalidation();
-    
+
     // Performance monitoring
     await example.demonstratePerformanceMonitoring();
-    
+
     // Advanced strategies
     await example.demonstrateAdvancedStrategies();
-    
+
     // Trading optimization
     await example.demonstrateTradingOptimization();
-    
+
     // Performance benchmarking
     await example.demonstratePerformanceBenchmarking();
-    
+
     // Health monitoring
     await example.demonstrateHealthMonitoring();
-    
+
     // Show Express integration
     const integration = example.getExpressIntegrationExample();
     logger.info('Express integration setup:', integration);
-    
+
     logger.info('✅ Multi-Level Cache Example completed successfully');
-    
+
   } catch (error) {
     logger.error('❌ Multi-Level Cache Example failed:', error);
     throw error;
@@ -579,6 +579,3 @@ export async function runMultiLevelCacheExample(): Promise<void> {
     await example.cleanup();
   }
 }
-
-// Export for use in other modules
-export { MultiLevelCacheExample }; 

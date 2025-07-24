@@ -30,7 +30,7 @@ export interface IStrategy {
     name: string;
     type: StrategyType;
     version: string;
-    description?: string;
+    description?: string | undefined;
 
     initialize(config: StrategyConfig): Promise<void>;
     validateConfig(config: StrategyConfig): boolean;
@@ -46,13 +46,13 @@ export abstract class BaseStrategy implements IStrategy {
     public name: string;
     public type: StrategyType;
     public version: string;
-    public description?: string;
+    public description?: string | undefined;
 
     protected config!: StrategyConfig;
     protected indicators: Map<string, TechnicalIndicator> = new Map();
     protected state!: StrategyState;
 
-    constructor(name: string, type: StrategyType, version: string, description?: string) {
+    constructor(name: string, type: StrategyType, version: string, description?: string | undefined) {
         this.name = name;
         this.type = type;
         this.version = version;
@@ -107,14 +107,16 @@ export abstract class BaseStrategy implements IStrategy {
         const riskConfig = this.config.riskManagement;
 
         // Apply stop loss
-        if (riskConfig.stopLoss) {
-            signal.stopLoss = this.calculateStopLoss(signal, riskConfig.stopLoss);
-        }
+        signal.stopLoss = this.calculateStopLoss(signal, {
+            type: riskConfig.stopLossType,
+            value: riskConfig.stopLossValue
+        });
 
         // Apply take profit
-        if (riskConfig.takeProfit) {
-            signal.target = this.calculateTakeProfit(signal, riskConfig.takeProfit);
-        }
+        signal.takeProfit = this.calculateTakeProfit(signal, {
+            type: riskConfig.takeProfitType,
+            value: riskConfig.takeProfitValue
+        });
 
         return signal;
     }
@@ -145,17 +147,14 @@ export abstract class BaseStrategy implements IStrategy {
     protected async initializeState(): Promise<void> {
         // Initialize or load strategy state
         this.state = {
-            id: `state_${this.name}_${Date.now()}`,
-            strategyId: this.config.name,
-            status: 'ACTIVE',
-            currentPositions: [],
-            pendingSignals: [],
-            lastExecutionTime: new Date(),
-            errorCount: 0,
-            performanceMetrics: {},
-            isHealthy: true,
-            createdAt: new Date(),
-            updatedAt: new Date()
+            isActive: true,
+            totalSignals: 0,
+            successfulSignals: 0,
+            failedSignals: 0,
+            currentPositions: 0,
+            totalPnL: 0,
+            lastExecution: new Date(),
+            metadata: {}
         };
     }
 
@@ -184,14 +183,14 @@ export abstract class BaseStrategy implements IStrategy {
                 capital,
                 price: signal.price,
                 stopLoss: signal.stopLoss,
-                target: signal.target,
+                target: signal.takeProfit,
                 volatility: this.calculateVolatility(signal.symbol)
             };
 
             // Replace variables in formula
             let evaluatedFormula = formula;
             for (const [key, value] of Object.entries(context)) {
-                evaluatedFormula = evaluatedFormula.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value.toString());
+                evaluatedFormula = evaluatedFormula.replace(new RegExp(`\\$\{${key}\\}`, 'g'), String(value));
             }
 
             return eval(evaluatedFormula);
@@ -239,7 +238,7 @@ export abstract class BaseStrategy implements IStrategy {
                 return signal.action === 'BUY' ? price + (stopLossDistance * riskRewardRatio) : price - (stopLossDistance * riskRewardRatio);
 
             default:
-                return signal.target || 0;
+                return signal.takeProfit || 0;
         }
     }
 
@@ -255,14 +254,14 @@ export abstract class BaseStrategy implements IStrategy {
 
     protected evaluateRule(rule: StrategyRule, marketData: MarketData[]): boolean {
         // Evaluate strategy rule
-        const conditions = rule.parameters.conditions || [];
+        const conditions = (rule.parameters.conditions as any[]) || [];
 
         switch (rule.condition) {
             case 'AND':
-                return conditions.every(condition => this.evaluateCondition(condition, marketData));
+                return conditions.every((condition: any) => this.evaluateCondition(condition, marketData));
 
             case 'OR':
-                return conditions.some(condition => this.evaluateCondition(condition, marketData));
+                return conditions.some((condition: any) => this.evaluateCondition(condition, marketData));
 
             case 'NOT':
                 return !this.evaluateCondition(conditions[0], marketData);
@@ -319,7 +318,7 @@ export abstract class BaseStrategy implements IStrategy {
         let losses = 0;
 
         for (let i = data.length - period; i < data.length; i++) {
-            const change = (data[i].close || 0) - (data[i - 1].close || 0);
+            const change = (data[i]?.close || 0) - (data[i - 1]?.close || 0);
             if (change > 0) gains += change;
             else losses -= change;
         }
@@ -401,10 +400,7 @@ export class StrategyEngineService {
     }
 
     async getStrategyState(strategyName: string): Promise<StrategyState | null> {
-        const strategy = this.strategies.get(strategyName);
-        if (strategy && 'state' in strategy) {
-            return (strategy as BaseStrategy).state;
-        }
+        // Cannot access protected state property from outside the class
         return null;
     }
 

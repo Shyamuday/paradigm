@@ -19,26 +19,27 @@ export class AuthManagerService extends EventEmitter {
         return AuthManagerService.instance;
     }
 
-    public getStatus() {
+    public async getStatus() {
+        const isAuthenticated = this.auth ? await this.auth.hasValidSession() : false;
         return {
             status: this.loginStatus,
             error: this.lastError,
-            isAuthenticated: this.auth?.checkSession() || false
+            isAuthenticated
         };
     }
 
     public async initialize(): Promise<void> {
         try {
             this.loginStatus = 'logging_in';
-            this.emit('status_change', this.getStatus());
+            this.emit('status_change', await this.getStatus());
 
             this.auth = new ZerodhaAuth();
 
             // Check if we have a valid session
-            if (this.auth.checkSession()) {
+            if (await this.auth.hasValidSession()) {
                 this.loginStatus = 'logged_in';
                 this.lastError = null;
-                this.emit('status_change', this.getStatus());
+                this.emit('status_change', await this.getStatus());
                 return;
             }
 
@@ -47,12 +48,12 @@ export class AuthManagerService extends EventEmitter {
 
             this.loginStatus = 'logged_in';
             this.lastError = null;
-            this.emit('status_change', this.getStatus());
+            this.emit('status_change', await this.getStatus());
 
         } catch (error: any) {
             this.loginStatus = 'error';
             this.lastError = error.message;
-            this.emit('status_change', this.getStatus());
+            this.emit('status_change', await this.getStatus());
             throw error;
         }
     }
@@ -71,6 +72,6 @@ export class AuthManagerService extends EventEmitter {
         await this.auth.logout();
         this.loginStatus = 'idle';
         this.lastError = null;
-        this.emit('status_change', this.getStatus());
+        this.emit('status_change', await this.getStatus());
     }
 } 

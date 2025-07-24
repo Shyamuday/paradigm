@@ -7,13 +7,13 @@ import { logger } from '../logger/logger';
  * Example demonstrating centralized error handling integration
  */
 class ErrorHandlerIntegrationExample {
-  
+
   /**
    * Example 1: Basic error handling with retry logic
    */
   async demonstrateRetryLogic(): Promise<void> {
     logger.info('🚀 Demonstrating retry logic...');
-    
+
     try {
       // Simulate an operation that might fail
       const result = await errorHandler.withRetry(
@@ -29,11 +29,11 @@ class ErrorHandlerIntegrationExample {
           requestId: 'demo_123'
         }
       );
-      
+
       logger.info('✅ Retry operation succeeded:', result);
-          } catch (error: unknown) {
-        logger.error('❌ Retry operation failed:', error);
-      }
+    } catch (error: unknown) {
+      logger.error('❌ Retry operation failed:', error);
+    }
   }
 
   /**
@@ -41,7 +41,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateErrorCategorization(): Promise<void> {
     logger.info('🚀 Demonstrating error categorization...');
-    
+
     const errors = [
       new Error('Authentication token expired'),
       new Error('Rate limit exceeded'),
@@ -75,7 +75,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateCustomErrors(): Promise<void> {
     logger.info('🚀 Demonstrating custom error creation...');
-    
+
     try {
       // Create specific error types
       throw createAuthenticationError('Invalid API credentials', {
@@ -120,7 +120,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateAsyncWrapping(): Promise<void> {
     logger.info('🚀 Demonstrating async function wrapping...');
-    
+
     // Original function that might throw errors
     const riskyOperation = async (input: number): Promise<string> => {
       if (input < 0) {
@@ -140,13 +140,13 @@ class ErrorHandlerIntegrationExample {
 
     // Test the wrapped function
     const testInputs = [50, -10, 150];
-    
+
     for (const input of testInputs) {
       try {
         const result = await safeOperation(input);
         logger.info(`✅ Safe operation result for ${input}:`, result);
       } catch (error) {
-        logger.info(`❌ Safe operation failed for ${input}:`, error.message);
+        logger.info(`❌ Safe operation failed for ${input}:`, error instanceof Error ? error.message : String(error));
       }
     }
   }
@@ -156,7 +156,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateErrorStatistics(): Promise<void> {
     logger.info('🚀 Demonstrating error statistics...');
-    
+
     // Generate some errors first
     for (let i = 0; i < 5; i++) {
       try {
@@ -183,7 +183,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateEventHandling(): Promise<void> {
     logger.info('🚀 Demonstrating event handling...');
-    
+
     // Listen for error events
     errorHandler.on('error', (error: any) => {
       logger.info('📡 Error event received:', {
@@ -218,7 +218,7 @@ class ErrorHandlerIntegrationExample {
    */
   async demonstrateTradingIntegration(): Promise<void> {
     logger.info('🚀 Demonstrating trading operation integration...');
-    
+
     // Simulate trading operations with error handling
     const tradingOperations = [
       {
@@ -266,7 +266,7 @@ class ErrorHandlerIntegrationExample {
             baseDelay: 500
           }
         );
-        
+
         logger.info(`✅ ${op.name} succeeded:`, result);
       } catch (error: unknown) {
         logger.error(`❌ ${op.name} failed:`, error);
@@ -279,7 +279,7 @@ class ErrorHandlerIntegrationExample {
    */
   async runAllDemonstrations(): Promise<void> {
     logger.info('🎯 Starting Error Handler Integration Demonstrations\n');
-    
+
     try {
       await this.demonstrateRetryLogic();
       await this.demonstrateErrorCategorization();
@@ -288,7 +288,7 @@ class ErrorHandlerIntegrationExample {
       await this.demonstrateErrorStatistics();
       await this.demonstrateEventHandling();
       await this.demonstrateTradingIntegration();
-      
+
       logger.info('\n🎉 All demonstrations completed successfully!');
     } catch (error) {
       logger.error('❌ Demonstration failed:', error);

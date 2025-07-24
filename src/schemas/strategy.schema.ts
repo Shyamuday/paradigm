@@ -44,12 +44,12 @@ export const IndicatorTypeSchema = z.enum([
 export const MarketDataSchema = z.object({
   symbol: z.string().min(1),
   timestamp: z.date(),
-  open: z.number(),
-  high: z.number(),
-  low: z.number(),
-  close: z.number(),
-  volume: z.number().int().nonnegative(),
-  oi: z.number().int().nonnegative().optional(),
+  open: z.number().nullable(),
+  high: z.number().nullable(),
+  low: z.number().nullable(),
+  close: z.number().nullable(),
+  volume: z.number().nullable(),
+  oi: z.number().nullable().optional(),
 });
 
 // Trade signal schema

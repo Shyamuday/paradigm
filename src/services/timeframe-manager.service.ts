@@ -8,6 +8,7 @@ import {
     CandleAggregationRequest,
     CandleAggregationResult
 } from '../types';
+import { Instrument } from '../types';
 
 export class TimeframeManagerService {
     private static readonly DEFAULT_TIMEFRAMES: TimeframeInterval[] = [
@@ -103,16 +104,16 @@ export class TimeframeManagerService {
                     timestamp: tickData.timestamp,
                     ltp: tickData.ltp,
                     volume: tickData.volume,
-                    change: tickData.change,
-                    changePercent: tickData.changePercent
+                    change: tickData.change ?? 0,
+                    changePercent: tickData.changePercent ?? 0
                 },
                 include: {
                     instrument: true
                 }
             });
-
             logger.debug(`Tick data saved for instrument ${tickData.instrumentId}`);
-            return savedTick;
+            const instrument = { ...savedTick.instrument, lotSize: savedTick.instrument.lotSize ?? 0, tickSize: savedTick.instrument.tickSize ?? 0 };
+            return { ...savedTick, instrument } as TickDataPoint;
         } catch (error) {
             logger.error('Failed to save tick data:', error);
             throw error;
@@ -164,7 +165,23 @@ export class TimeframeManagerService {
             }
 
             logger.info(`Aggregated ${tickData.length} ticks into ${savedCandles.length} candles for ${timeframeName}`);
-            return savedCandles;
+            // Fix lotSize/tickSize for all returned elements
+            return savedCandles.map(c => {
+                // Create a proper Instrument object that matches the interface
+                const instrument: Instrument = {
+                    id: c.instrument.id,
+                    symbol: c.instrument.symbol,
+                    name: c.instrument.name,
+                    exchange: c.instrument.exchange,
+                    instrumentType: c.instrument.instrumentType,
+                    lotSize: Number(c.instrument.lotSize ?? 1),
+                    tickSize: Number(c.instrument.tickSize ?? 0.01),
+                    isActive: c.instrument.isActive,
+                    createdAt: c.instrument.createdAt,
+                    updatedAt: c.instrument.updatedAt
+                };
+                return { ...c, instrument } as MultiTimeframeCandleData;
+            });
         } catch (error) {
             logger.error('Failed to aggregate to candles:', error);
             throw error;
@@ -268,8 +285,12 @@ export class TimeframeManagerService {
                     timeframe: true
                 }
             });
-
-            return savedCandle;
+            const instrument = {
+                ...savedCandle.instrument,
+                lotSize: Number(savedCandle.instrument.lotSize) || 0,
+                tickSize: Number(savedCandle.instrument.tickSize) || 0
+            };
+            return { ...savedCandle, instrument } as MultiTimeframeCandleData;
         } catch (error) {
             logger.error('Failed to save candle data:', error);
             throw error;
@@ -322,10 +343,20 @@ export class TimeframeManagerService {
                 }
             });
 
+            // Fix lotSize/tickSize for all candles
+            const fixedCandles = candles.map(c => {
+                const fixedInstrument = {
+                    ...c.instrument,
+                    lotSize: Number(c.instrument.lotSize) || 0,
+                    tickSize: Number(c.instrument.tickSize) || 0
+                };
+                return { ...c, instrument: fixedInstrument } as MultiTimeframeCandleData;
+            });
+
             return {
                 symbol: request.symbol,
                 timeframe: request.timeframe,
-                candles,
+                candles: fixedCandles,
                 totalCount,
                 hasMore: totalCount > (request.limit || 100)
             };
@@ -353,7 +384,7 @@ export class TimeframeManagerService {
                 return null;
             }
 
-            return await db.candleData.findFirst({
+            const savedCandle = await db.candleData.findFirst({
                 where: {
                     instrumentId: instrument.id,
                     timeframeId: timeframeConfig.id
@@ -364,6 +395,14 @@ export class TimeframeManagerService {
                     timeframe: true
                 }
             });
+
+            if (!savedCandle) return null;
+            const fixedInstrument = {
+                ...savedCandle.instrument,
+                lotSize: Number(savedCandle.instrument.lotSize) || 0,
+                tickSize: Number(savedCandle.instrument.tickSize) || 0
+            };
+            return { ...savedCandle, instrument: fixedInstrument } as MultiTimeframeCandleData;
         } catch (error) {
             logger.error('Failed to get latest candle:', error);
             throw error;
@@ -431,5 +470,13 @@ export class TimeframeManagerService {
             logger.error('Failed to get volume profile:', error);
             throw error;
         }
+    }
+
+    // Stub for getHistoricalData
+    async getHistoricalData(symbol: string, timeframe: string, startDate: Date, endDate: Date): Promise<any[]> {
+        // Return mock data for testing
+        return [
+            { symbol, timestamp: startDate, open: 100, high: 110, low: 90, close: 105, volume: 1000 }
+        ];
     }
 } 

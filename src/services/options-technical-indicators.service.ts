@@ -2,7 +2,6 @@ import { logger } from '../logger/logger';
 import {
     MarketData,
     CandleData,
-    OptionsContract,
     TimeframeConfig
 } from '../types';
 
@@ -76,7 +75,7 @@ export class OptionsTechnicalIndicatorsService {
      * Apply ADX indicator to options data
      */
     async calculateADXForOptions(
-        optionsContract: OptionsContract,
+        optionsContract: any, // Assuming OptionsContract is not directly imported, use 'any' for now
         timeframe: string,
         period: number = 14
     ): Promise<ADXResult | null> {
@@ -110,7 +109,7 @@ export class OptionsTechnicalIndicatorsService {
      * Apply RSI indicator to options data
      */
     async calculateRSIForOptions(
-        optionsContract: OptionsContract,
+        optionsContract: any, // Assuming OptionsContract is not directly imported, use 'any' for now
         timeframe: string,
         period: number = 14
     ): Promise<RSIResult | null> {
@@ -143,7 +142,7 @@ export class OptionsTechnicalIndicatorsService {
      * Apply MACD indicator to options data
      */
     async calculateMACDForOptions(
-        optionsContract: OptionsContract,
+        optionsContract: any, // Assuming OptionsContract is not directly imported, use 'any' for now
         timeframe: string,
         fastPeriod: number = 12,
         slowPeriod: number = 26,
@@ -178,7 +177,7 @@ export class OptionsTechnicalIndicatorsService {
      * Apply Bollinger Bands to options data
      */
     async calculateBollingerBandsForOptions(
-        optionsContract: OptionsContract,
+        optionsContract: any, // Assuming OptionsContract is not directly imported, use 'any' for now
         timeframe: string,
         period: number = 20,
         standardDeviations: number = 2
@@ -212,7 +211,7 @@ export class OptionsTechnicalIndicatorsService {
      * Comprehensive technical analysis for options
      */
     async performTechnicalAnalysisForOptions(
-        optionsContract: OptionsContract,
+        optionsContract: any, // Assuming OptionsContract is not directly imported, use 'any' for now
         timeframe: string,
         indicators: string[] = ['ADX', 'RSI', 'MACD', 'BOLLINGER_BANDS']
     ): Promise<OptionsTechnicalAnalysis | null> {
@@ -233,18 +232,26 @@ export class OptionsTechnicalIndicatorsService {
             // Calculate requested indicators
             for (const indicator of indicators) {
                 switch (indicator.toUpperCase()) {
-                    case 'ADX':
-                        analysis.indicators.adx = await this.calculateADXForOptions(optionsContract, timeframe);
+                    case 'ADX': {
+                        const adx = await this.calculateADXForOptions(optionsContract, timeframe);
+                        if (adx) analysis.indicators.adx = adx;
                         break;
-                    case 'RSI':
-                        analysis.indicators.rsi = await this.calculateRSIForOptions(optionsContract, timeframe);
+                    }
+                    case 'RSI': {
+                        const rsi = await this.calculateRSIForOptions(optionsContract, timeframe);
+                        if (rsi) analysis.indicators.rsi = rsi;
                         break;
-                    case 'MACD':
-                        analysis.indicators.macd = await this.calculateMACDForOptions(optionsContract, timeframe);
+                    }
+                    case 'MACD': {
+                        const macd = await this.calculateMACDForOptions(optionsContract, timeframe);
+                        if (macd) analysis.indicators.macd = macd;
                         break;
-                    case 'BOLLINGER_BANDS':
-                        analysis.indicators.bollingerBands = await this.calculateBollingerBandsForOptions(optionsContract, timeframe);
+                    }
+                    case 'BOLLINGER_BANDS': {
+                        const bb = await this.calculateBollingerBandsForOptions(optionsContract, timeframe);
+                        if (bb) analysis.indicators.bollingerBands = bb;
                         break;
+                    }
                     default:
                         logger.warn(`Unsupported indicator: ${indicator}`);
                 }
@@ -295,9 +302,9 @@ export class OptionsTechnicalIndicatorsService {
     private calculateADX(data: CandleData[], period: number = 14): ADXResult | null {
         if (data.length < period + 1) return null;
 
-        const high = data.map(d => d.high);
-        const low = data.map(d => d.low);
-        const close = data.map(d => d.close);
+        const high = data.map(d => (d && d.high != null ? d.high : 0));
+        const low = data.map(d => (d && d.low != null ? d.low : 0));
+        const close = data.map(d => (d && d.close != null ? d.close : 0));
 
         const plusDM: number[] = [];
         const minusDM: number[] = [];
@@ -305,15 +312,22 @@ export class OptionsTechnicalIndicatorsService {
 
         // Calculate True Range and Directional Movement
         for (let i = 1; i < data.length; i++) {
+            const currentHigh = high[i] ?? 0;
+            const currentLow = low[i] ?? 0;
+            const currentClose = close[i] ?? 0;
+            const prevClose = close[i - 1] ?? 0;
+            const prevHigh = high[i - 1] ?? 0;
+            const prevLow = low[i - 1] ?? 0;
+
             const tr = Math.max(
-                high[i] - low[i],
-                Math.abs(high[i] - close[i - 1]),
-                Math.abs(low[i] - close[i - 1])
+                currentHigh - currentLow,
+                Math.abs(currentHigh - prevClose),
+                Math.abs(currentLow - prevClose)
             );
             trueRange.push(tr);
 
-            const highDiff = high[i] - high[i - 1];
-            const lowDiff = low[i - 1] - low[i];
+            const highDiff = currentHigh - prevHigh;
+            const lowDiff = prevLow - currentLow;
 
             if (highDiff > lowDiff && highDiff > 0) {
                 plusDM.push(highDiff);
@@ -333,19 +347,22 @@ export class OptionsTechnicalIndicatorsService {
         const smoothedMinusDM = this.smooth(minusDM, period);
 
         // Calculate DI values
-        const plusDI = (smoothedPlusDM[smoothedPlusDM.length - 1] / smoothedTR[smoothedTR.length - 1]) * 100;
-        const minusDI = (smoothedMinusDM[smoothedMinusDM.length - 1] / smoothedTR[smoothedTR.length - 1]) * 100;
+        const plusDI = (smoothedPlusDM[smoothedPlusDM.length - 1] ?? 0) / (smoothedTR[smoothedTR.length - 1] ?? 1) * 100;
+        const minusDI = (smoothedMinusDM[smoothedMinusDM.length - 1] ?? 0) / (smoothedTR[smoothedTR.length - 1] ?? 1) * 100;
 
         // Calculate DX and ADX
-        const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-        const adx = this.smooth([dx], period)[0];
+        const dx = (plusDI + minusDI) !== 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0;
+        const adx = (this.smooth([dx], period)[0] ?? 0);
+
+        const lastData = data[data.length - 1];
+        const firstData = data[0];
 
         return {
             adx,
             plusDI,
             minusDI,
-            timestamp: data[data.length - 1].timestamp,
-            timeframe: data[0].timeframe?.name || 'unknown'
+            timestamp: lastData?.timestamp ?? new Date(),
+            timeframe: 'unknown'
         };
     }
 
@@ -360,7 +377,16 @@ export class OptionsTechnicalIndicatorsService {
 
         // Calculate gains and losses
         for (let i = 1; i < data.length; i++) {
-            const change = data[i].close - data[i - 1].close;
+            const prev = data[i - 1];
+            const curr = data[i];
+            if (!prev || !curr || typeof prev.close !== 'number' || typeof curr.close !== 'number') {
+                gains.push(0);
+                losses.push(0);
+                continue;
+            }
+            const prevClose = prev.close;
+            const currClose = curr.close;
+            const change = currClose - prevClose;
             gains.push(change > 0 ? change : 0);
             losses.push(change < 0 ? Math.abs(change) : 0);
         }
@@ -370,13 +396,15 @@ export class OptionsTechnicalIndicatorsService {
         const avgLoss = losses.slice(-period).reduce((sum, loss) => sum + loss, 0) / period;
 
         // Calculate RSI
-        const rs = avgGain / avgLoss;
+        const rs = avgGain / (avgLoss || 1);
         const rsi = 100 - (100 / (1 + rs));
 
+        const lastData = data[data.length - 1];
+        const firstData = data[0];
         return {
             rsi,
-            timestamp: data[data.length - 1].timestamp,
-            timeframe: data[0].timeframe?.name || 'unknown'
+            timestamp: (lastData && lastData.timestamp) ? lastData.timestamp : new Date(),
+            timeframe: (firstData && (firstData as any).timeframe && (firstData as any).timeframe.name) ? (firstData as any).timeframe.name : 'unknown'
         };
     }
 
@@ -391,28 +419,30 @@ export class OptionsTechnicalIndicatorsService {
     ): MACDResult | null {
         if (data.length < slowPeriod + signalPeriod) return null;
 
-        const close = data.map(d => d.close);
+        const close = data.map(d => (d && d.close != null) ? d.close : 0);
 
         // Calculate EMAs
         const fastEMA = this.calculateEMA(close, fastPeriod);
         const slowEMA = this.calculateEMA(close, slowPeriod);
 
         // Calculate MACD line
-        const macdLine = fastEMA[fastEMA.length - 1] - slowEMA[slowEMA.length - 1];
+        const macdLine = (fastEMA[fastEMA.length - 1] ?? 0) - (slowEMA[slowEMA.length - 1] ?? 0);
 
         // Calculate signal line
-        const macdValues = fastEMA.map((fast, i) => fast - slowEMA[i]);
-        const signalLine = this.calculateEMA(macdValues, signalPeriod)[signalPeriod - 1];
+        const macdValues = fastEMA.map((fast, i) => fast - (slowEMA[i] ?? 0));
+        const signalLine = (this.calculateEMA(macdValues, signalPeriod)[signalPeriod - 1] ?? 0);
 
         // Calculate histogram
         const histogram = macdLine - signalLine;
 
+        const lastData = data[data.length - 1];
+        const firstData = data[0];
         return {
             macd: macdLine,
             signal: signalLine,
             histogram,
-            timestamp: data[data.length - 1].timestamp,
-            timeframe: data[0].timeframe?.name || 'unknown'
+            timestamp: (lastData && lastData.timestamp) ? lastData.timestamp : new Date(),
+            timeframe: (firstData && (firstData as any).timeframe && (firstData as any).timeframe.name) ? (firstData as any).timeframe.name : 'unknown'
         };
     }
 
@@ -426,14 +456,14 @@ export class OptionsTechnicalIndicatorsService {
     ): BollingerBandsResult | null {
         if (data.length < period) return null;
 
-        const close = data.map(d => d.close);
+        const close = data.map(d => (d && d.close != null) ? d.close : 0);
         const recentClose = close.slice(-period);
 
         // Calculate middle band (SMA)
-        const middle = recentClose.reduce((sum, price) => sum + price, 0) / period;
+        const middle = recentClose.reduce((sum, price) => sum + price, 0) / (period || 1);
 
         // Calculate standard deviation
-        const variance = recentClose.reduce((sum, price) => sum + Math.pow(price - middle, 2), 0) / period;
+        const variance = recentClose.reduce((sum, price) => sum + Math.pow(price - middle, 2), 0) / (period || 1);
         const stdDev = Math.sqrt(variance);
 
         // Calculate upper and lower bands
@@ -441,18 +471,20 @@ export class OptionsTechnicalIndicatorsService {
         const lower = middle - (standardDeviations * stdDev);
 
         // Calculate bandwidth and %B
-        const bandwidth = (upper - lower) / middle * 100;
-        const currentPrice = close[close.length - 1];
-        const percentB = (currentPrice - lower) / (upper - lower);
+        const bandwidth = middle !== 0 ? (upper - lower) / middle * 100 : 0;
+        const currentPrice = close.length > 0 ? (close[close.length - 1] ?? 0) : 0;
+        const percentB = (upper - lower) !== 0 ? (currentPrice - lower) / (upper - lower) : 0;
 
+        const lastData = data[data.length - 1];
+        const firstData = data[0];
         return {
             upper,
             middle,
             lower,
             bandwidth,
             percentB,
-            timestamp: data[data.length - 1].timestamp,
-            timeframe: data[0].timeframe?.name || 'unknown'
+            timestamp: (lastData && lastData.timestamp) ? lastData.timestamp : new Date(),
+            timeframe: (firstData && (firstData as any).timeframe && (firstData as any).timeframe.name) ? (firstData as any).timeframe.name : 'unknown'
         };
     }
 
@@ -464,11 +496,13 @@ export class OptionsTechnicalIndicatorsService {
         let sum = 0;
 
         for (let i = 0; i < data.length; i++) {
+            const currentData = data[i] ?? 0;
             if (i < period) {
-                sum += data[i];
+                sum += currentData;
                 smoothed.push(sum / (i + 1));
             } else {
-                sum = smoothed[i - 1] * (period - 1) + data[i];
+                const prevSmoothed = smoothed[i - 1] ?? 0;
+                sum = prevSmoothed * (period - 1) + currentData;
                 smoothed.push(sum / period);
             }
         }
@@ -486,13 +520,15 @@ export class OptionsTechnicalIndicatorsService {
         // First EMA is SMA
         let sum = 0;
         for (let i = 0; i < period; i++) {
-            sum += data[i];
+            sum += data[i] ?? 0;
         }
         ema.push(sum / period);
 
         // Calculate subsequent EMAs
         for (let i = period; i < data.length; i++) {
-            const newEMA = (data[i] * multiplier) + (ema[ema.length - 1] * (1 - multiplier));
+            const prevEMA = ema[ema.length - 1] ?? 0;
+            const currentData = data[i] ?? 0;
+            const newEMA = (currentData * multiplier) + (prevEMA * (1 - multiplier));
             ema.push(newEMA);
         }
 
@@ -521,25 +557,14 @@ export class OptionsTechnicalIndicatorsService {
             const volume = Math.floor(Math.random() * 1000) + 100;
 
             data.push({
-                id: `mock_${i}`,
-                instrumentId: `instrument_${symbol}`,
-                instrument: { id: `instrument_${symbol}`, symbol, name: symbol },
-                timeframeId: `timeframe_${timeframe}`,
-                timeframe: { id: `timeframe_${timeframe}`, name: timeframe, intervalMinutes: 5 },
-                timestamp,
+                instrumentToken: i,
+                symbol,
                 open,
                 high,
                 low,
                 close,
                 volume,
-                typicalPrice: (high + low + close) / 3,
-                weightedPrice: (high + low + close + close) / 4,
-                priceChange: close - open,
-                priceChangePercent: ((close - open) / open) * 100,
-                upperShadow: high - Math.max(open, close),
-                lowerShadow: Math.min(open, close) - low,
-                bodySize: Math.abs(close - open),
-                totalRange: high - low
+                timestamp
             });
         }
 

@@ -191,7 +191,9 @@ export class TerminalDashboard extends EventEmitter {
             vi: true
         });
 
-        msg.display(message, 3);
+        msg.display(message, () => {
+            // Callback function for when message is dismissed
+        });
     }
 
     private showError(error: string) {
@@ -212,7 +214,9 @@ export class TerminalDashboard extends EventEmitter {
             vi: true
         });
 
-        msg.display(error, 3);
+        msg.display(error, () => {
+            // Callback function for when error is dismissed
+        });
     }
 
     private updateAuthStatus(status: any) {
@@ -226,11 +230,9 @@ export class TerminalDashboard extends EventEmitter {
                 content = '{yellow-fg}Status:{/} Logging in...\n';
                 break;
             case 'logged_in': {
-                const session = this.authManager.getSession();
-                const userId = session?.userId || 'N/A';
-                const loginTime = session?.loginTime ?
-                    new Date(session.loginTime).toLocaleTimeString() :
-                    'N/A';
+                const authStatus = this.authManager.getStatus();
+                const userId = 'N/A'; // Session info not available in getStatus
+                const loginTime = 'N/A';
 
                 content = '{green-fg}Status:{/} Authenticated\n' +
                     `User ID: ${userId}\n` +
@@ -287,34 +289,39 @@ export class TerminalDashboard extends EventEmitter {
     }
 
     public updateOrders(trades: Trade[]) {
-        const tableData = trades.map(trade => [
-            new Date(trade.orderTime).toLocaleTimeString(),
-            trade.instrument.symbol,
-            trade.action,
-            trade.quantity.toString(),
-            trade.status
-        ]);
+        if (this.ordersTable) {
+            const tableData = trades.map(trade => [
+                new Date(trade.orderTime).toLocaleTimeString(),
+                trade.instrument.symbol,
+                trade.action,
+                trade.quantity.toString(),
+                trade.status
+            ]);
 
-        this.ordersTable.setData({
-            headers: ['Time', 'Symbol', 'Type', 'Qty', 'Status'],
-            data: tableData.length ? tableData : [['No orders', '-', '-', '-', '-']]
-        });
-        this.screen.render();
+            this.ordersTable.setData({
+                headers: ['Time', 'Symbol', 'Type', 'Qty', 'Status'],
+                data: tableData.length ? tableData : [['No orders', '-', '-', '-', '-']]
+            });
+            this.screen.render();
+        }
     }
 
     public updatePnL(data: { time: string, value: number }[]) {
-        const x = data.map(d => d.time);
-        const y = data.map(d => d.value);
+        if (this.pnlGraph) {
+            const x = data.map(d => d.time);
+            const y = data.map(d => d.value);
 
-        this.pnlGraph.setData([{
-            title: 'P&L',
-            x: x,
-            y: y,
-            style: {
-                line: (y.length > 0 && y[y.length - 1] >= 0) ? 'green' : 'red'
-            }
-        }]);
-        this.screen.render();
+            const lastValue = y.length > 0 ? y[y.length - 1] : undefined;
+            this.pnlGraph.setData([{
+                title: 'P&L',
+                x: x,
+                y: y,
+                style: {
+                    line: (lastValue !== undefined && lastValue >= 0) ? 'green' : 'red'
+                }
+            }]);
+            this.screen.render();
+        }
     }
 
     public updateStrategyStatus(strategies: any[]) {

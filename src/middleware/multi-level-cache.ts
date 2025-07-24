@@ -78,7 +78,7 @@ export class MultiLevelCacheMiddleware {
 
     const keyData = `${method}:${url}:${query}:${body}:${userId}`;
     const hash = crypto.createHash('md5').update(keyData).digest('hex');
-    
+
     return `api:${hash}`;
   }
 
@@ -111,14 +111,14 @@ export class MultiLevelCacheMiddleware {
    */
   private generateCacheTags(req: Request): string[] {
     const tags = [...(this.config.tags || [])];
-    
+
     // Add method tag
     tags.push(`method:${req.method.toLowerCase()}`);
-    
+
     // Add path tag
     const pathParts = req.path.split('/').filter(Boolean);
     tags.push(`path:${pathParts[0] || 'root'}`);
-    
+
     // Add user tag if available
     const userId = (req as any).user?.id;
     if (userId) {
@@ -145,39 +145,27 @@ export class MultiLevelCacheMiddleware {
   /**
    * Response caching middleware
    */
-  responseCache = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  responseCache = async function (this: MultiLevelCacheMiddleware, req: Request, res: Response, next: NextFunction): Promise<void> {
     if (!this.config.enableResponseCaching || !this.shouldCache(req)) {
-      return next();
+      next();
+      return;
     }
-
     const cacheKey = this.generateCacheKey(req);
     const tags = this.generateCacheTags(req);
-
     try {
-      // Try to get cached response
       const cachedResponse = await this.cacheService.get<CachedResponse>(cacheKey, tags);
-      
       if (cachedResponse) {
-        // Set headers from cached response
         Object.entries(cachedResponse.headers).forEach(([key, value]) => {
           res.setHeader(key, value);
         });
-
-        // Add cache hit header
         res.setHeader('X-Cache', 'HIT');
         res.setHeader('X-Cache-Key', cacheKey);
-
-        // Return cached response
         res.status(cachedResponse.statusCode).json(cachedResponse.data);
         return;
       }
-
-      // Cache miss - override res.json to cache the response
       const originalJson = res.json;
       const originalSend = res.send;
-
-      res.json = function(data: any) {
-        // Cache the response
+      res.json = function (this: any, data: any) {
         const response: CachedResponse = {
           data,
           headers: res.getHeaders() as Record<string, string>,
@@ -185,20 +173,14 @@ export class MultiLevelCacheMiddleware {
           timestamp: Date.now(),
           ttl: this.config.ttl || 300
         };
-
-        this.cacheService.set(cacheKey, response, tags, this.config.ttl).catch(error => {
+        (this as MultiLevelCacheMiddleware).cacheService.set(cacheKey, response, tags, (this as MultiLevelCacheMiddleware).config.ttl).catch((error: any) => {
           logger.error('Failed to cache response:', error);
         });
-
-        // Add cache miss header
         res.setHeader('X-Cache', 'MISS');
         res.setHeader('X-Cache-Key', cacheKey);
-
         return originalJson.call(this, data);
       }.bind(this);
-
-      res.send = function(data: any) {
-        // Cache the response
+      res.send = function (this: any, data: any) {
         const response: CachedResponse = {
           data,
           headers: res.getHeaders() as Record<string, string>,
@@ -206,63 +188,51 @@ export class MultiLevelCacheMiddleware {
           timestamp: Date.now(),
           ttl: this.config.ttl || 300
         };
-
-        this.cacheService.set(cacheKey, response, tags, this.config.ttl).catch(error => {
+        (this as MultiLevelCacheMiddleware).cacheService.set(cacheKey, response, tags, (this as MultiLevelCacheMiddleware).config.ttl).catch((error: any) => {
           logger.error('Failed to cache response:', error);
         });
-
-        // Add cache miss header
         res.setHeader('X-Cache', 'MISS');
         res.setHeader('X-Cache-Key', cacheKey);
-
         return originalSend.call(this, data);
       }.bind(this);
-
       next();
     } catch (error) {
       logger.error('Error in response cache middleware:', error);
       next();
     }
-  };
+  } as (this: MultiLevelCacheMiddleware, req: Request, res: Response, next: NextFunction) => Promise<void>;
 
   /**
    * Request caching middleware (for expensive operations)
    */
-  requestCache = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  requestCache = async function (this: MultiLevelCacheMiddleware, req: Request, res: Response, next: NextFunction): Promise<void> {
     if (!this.config.enableRequestCaching || !this.shouldCache(req)) {
-      return next();
+      next();
+      return;
     }
-
     const cacheKey = `request:${this.generateCacheKey(req)}`;
     const tags = this.generateCacheTags(req);
-
     try {
-      // Try to get cached request result
       const cachedResult = await this.cacheService.get(cacheKey, tags);
-      
       if (cachedResult) {
         res.setHeader('X-Request-Cache', 'HIT');
         res.json(cachedResult);
         return;
       }
-
-      // Cache miss - store request result
       const originalJson = res.json;
-      res.json = function(data: any) {
-        this.cacheService.set(cacheKey, data, tags, this.config.ttl).catch(error => {
+      res.json = function (this: any, data: any) {
+        (this as MultiLevelCacheMiddleware).cacheService.set(cacheKey, data, tags, (this as MultiLevelCacheMiddleware).config.ttl).catch((error: any) => {
           logger.error('Failed to cache request result:', error);
         });
-
         res.setHeader('X-Request-Cache', 'MISS');
         return originalJson.call(this, data);
       }.bind(this);
-
       next();
     } catch (error) {
       logger.error('Error in request cache middleware:', error);
       next();
     }
-  };
+  } as (this: MultiLevelCacheMiddleware, req: Request, res: Response, next: NextFunction) => Promise<void>;
 
   /**
    * Cache invalidation middleware
@@ -352,22 +322,22 @@ export class MultiLevelCacheMiddleware {
     return {
       // Get cache statistics
       'GET /api/cache/stats': this.getCacheStats.bind(this),
-      
+
       // Get cache operations
       'GET /api/cache/operations': this.getCacheOperations.bind(this),
-      
+
       // Clear cache
       'POST /api/cache/clear': this.clearCache.bind(this),
-      
+
       // Invalidate cache by tags
       'POST /api/cache/invalidate': this.invalidateCache.bind(this),
-      
+
       // Get cache health
       'GET /api/cache/health': this.getCacheHealth.bind(this),
-      
+
       // Cache configuration
       'GET /api/cache/config': this.getCacheConfig.bind(this),
-      
+
       // Update cache configuration
       'PUT /api/cache/config': this.updateCacheConfig.bind(this)
     };
@@ -453,10 +423,11 @@ export class MultiLevelCacheMiddleware {
       const { tags } = req.body;
 
       if (!Array.isArray(tags)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Tags array is required'
         });
+        return;
       }
 
       await this.cacheService.invalidateByTags(tags);
@@ -539,7 +510,7 @@ export class MultiLevelCacheMiddleware {
   private async updateCacheConfig(req: Request, res: Response): Promise<void> {
     try {
       const updates = req.body;
-      
+
       // Update configuration
       Object.assign(this.config, updates);
 

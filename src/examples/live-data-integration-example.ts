@@ -1,12 +1,16 @@
 import { LiveDataIntegrationService } from '../services/live-data-integration.service';
 import { logger } from '../logger/logger';
 import { db } from '../database/database';
+import { InstrumentsManager } from '../services/instruments-manager.service';
+import { ZerodhaAuth } from '../auth/zerodha-auth';
 
 /**
  * Example showing how to integrate multi-timeframe system with live Zerodha data
  */
 async function liveDataIntegrationExample() {
-    const liveDataService = new LiveDataIntegrationService();
+    const auth = new ZerodhaAuth();
+    const instrumentsManager = new InstrumentsManager(auth);
+    const liveDataService = new LiveDataIntegrationService(instrumentsManager, auth.getKite());
 
     try {
         logger.info('Starting live data integration example...');
@@ -77,7 +81,9 @@ async function liveDataIntegrationExample() {
  * Example showing integration with actual Zerodha websocket
  */
 async function zerodhaWebsocketIntegrationExample() {
-    const liveDataService = new LiveDataIntegrationService();
+    const auth = new ZerodhaAuth();
+    const instrumentsManager = new InstrumentsManager(auth);
+    const liveDataService = new LiveDataIntegrationService(instrumentsManager, auth.getKite());
 
     try {
         logger.info('Setting up Zerodha websocket integration...');
@@ -152,7 +158,9 @@ async function zerodhaWebsocketIntegrationExample() {
  * Example showing real-time strategy integration
  */
 async function realTimeStrategyIntegrationExample() {
-    const liveDataService = new LiveDataIntegrationService();
+    const auth = new ZerodhaAuth();
+    const instrumentsManager = new InstrumentsManager(auth);
+    const liveDataService = new LiveDataIntegrationService(instrumentsManager, auth.getKite());
 
     try {
         logger.info('Setting up real-time strategy integration...');

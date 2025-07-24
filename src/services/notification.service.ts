@@ -103,17 +103,17 @@ export class NotificationService extends EventEmitter {
       }
 
       await Promise.allSettled(promises);
-      
+
       this.emit('notification:sent', notification);
-      logger.info('Notification sent', { 
-        title: notification.title, 
-        channels: notification.channels 
+      logger.info('Notification sent', {
+        title: notification.title,
+        channels: notification.channels
       });
 
     } catch (error) {
-      logger.error('Failed to send notification', { 
-        title: notification.title, 
-        error 
+      logger.error('Failed to send notification', {
+        title: notification.title,
+        error
       });
       this.emit('notification:error', notification, error);
     }
@@ -286,7 +286,7 @@ export class NotificationService extends EventEmitter {
   private async sendTelegram(notification: NotificationMessage): Promise<void> {
     try {
       const message = `*${notification.title}*\n\n${notification.message}`;
-      
+
       // This would use telegram bot API
       logger.debug('Telegram notification would be sent', {
         chatId: this.config.telegram?.chatId,
@@ -436,14 +436,14 @@ export class NotificationService extends EventEmitter {
     config: Partial<NotificationConfig>;
     templates: string[];
   } {
+    const config: Partial<NotificationConfig> = {};
+    if (this.config.email) config.email = this.config.email;
+    if (this.config.slack) config.slack = this.config.slack;
+    if (this.config.telegram) config.telegram = this.config.telegram;
+    if (this.config.discord) config.discord = this.config.discord;
     return {
       enabled: this.isEnabled,
-      config: {
-        email: this.config.email ? { host: this.config.email.host, port: this.config.email.port } : undefined,
-        slack: this.config.slack ? { channel: this.config.slack.channel } : undefined,
-        telegram: this.config.telegram ? { chatId: this.config.telegram.chatId } : undefined,
-        discord: this.config.discord ? {} : undefined
-      },
+      config,
       templates: Array.from(this.templates.keys())
     };
   }
