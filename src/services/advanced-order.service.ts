@@ -1,7 +1,8 @@
-import { db } from '../database/database';
-import { logger } from '../logger/logger';
 import { OrderService } from './order.service';
 import { MarketDataService } from './market-data.service';
+import { InstrumentsManager } from './instruments-manager.service';
+import { KiteConnect } from 'kiteconnect';
+import { logger } from '../logger/logger';
 
 interface BracketOrderConfig {
     symbol: string;
@@ -40,15 +41,8 @@ interface OrderMonitorConfig {
     trailDistance?: number;
 }
 
-interface TradeSignal {
-    symbol: string;
-    action: 'BUY' | 'SELL';
-    quantity: number;
-    price?: number;
-    orderType?: 'MARKET' | 'LIMIT' | 'STOP';
-    stopLoss?: number;
-    target?: number;
-}
+// Remove the local TradeSignal interface and use the one from types
+import { TradeSignal } from '../types';
 
 export class AdvancedOrderService {
     private orderService: OrderService;
@@ -56,9 +50,9 @@ export class AdvancedOrderService {
     private monitoredOrders: Map<string, OrderMonitorConfig>;
     private monitorInterval: NodeJS.Timeout | null;
 
-    constructor() {
+    constructor(instrumentsManager: InstrumentsManager, kite: KiteConnect) {
         this.orderService = new OrderService();
-        this.marketDataService = new MarketDataService();
+        this.marketDataService = new MarketDataService(instrumentsManager, kite);
         this.monitoredOrders = new Map();
         this.monitorInterval = null;
         this.startMonitoring();
@@ -68,13 +62,15 @@ export class AdvancedOrderService {
         try {
             // Create main entry order
             const entryOrder = await this.orderService.createTrade(sessionId, {
+                id: `signal_${Date.now()}`,
+                strategy: 'BracketOrder',
                 symbol: config.symbol,
                 action: 'BUY',
                 quantity: config.quantity,
                 price: config.entryPrice || 0,
-                orderType: config.entryType,
                 stopLoss: config.stopLoss,
-                target: config.target
+                target: config.target,
+                timestamp: new Date()
             });
 
             // Add to monitoring if it's a trailing stop
@@ -89,7 +85,7 @@ export class AdvancedOrderService {
                 });
             }
 
-            logger.info('Bracket order created:', entryOrder.id);
+            logger.info('Bracket order created', { id: entryOrder?.id ?? 'unknown' });
             return entryOrder;
         } catch (error) {
             logger.error('Failed to create bracket order:', error);
@@ -108,18 +104,20 @@ export class AdvancedOrderService {
                 const lotPrice = this.calculateIcebergLotPrice(config.limitPrice, config.priceVariance);
 
                 const order = await this.orderService.createTrade(sessionId, {
+                    id: `signal_${Date.now()}_${i}`,
+                    strategy: 'IcebergOrder',
                     symbol: config.symbol,
                     action: config.side,
                     quantity: lotQuantity,
                     price: lotPrice || 0,
-                    orderType: config.limitPrice ? 'LIMIT' : 'MARKET'
+                    timestamp: new Date()
                 });
 
                 orders.push(order);
                 remainingQuantity -= lotQuantity;
             }
 
-            logger.info('Iceberg order created with', orders.length, 'lots');
+            logger.info(`Iceberg order created with ${orders.length} lots`);
             return orders;
         } catch (error) {
             logger.error('Failed to create iceberg order:', error);
@@ -130,11 +128,14 @@ export class AdvancedOrderService {
     async createTrailingStopOrder(sessionId: string, config: TrailingStopConfig) {
         try {
             const order = await this.orderService.createTrade(sessionId, {
+                id: `signal_${Date.now()}`,
+                strategy: 'TrailingStopOrder',
                 symbol: config.symbol,
                 action: 'SELL',
                 quantity: config.quantity,
-                orderType: 'STOP',
-                stopLoss: config.activationPrice
+                price: config.activationPrice,
+                stopLoss: config.activationPrice,
+                timestamp: new Date()
             });
 
             // Add to monitoring
@@ -220,8 +221,8 @@ export class AdvancedOrderService {
             const trade = await this.orderService.getTrade(orderId);
             if (!trade) return;
 
-            await this.orderService.updateTradeStatus(orderId, 'UPDATED', undefined, undefined);
-            logger.info('Updated trailing stop for order:', orderId, 'New stop:', newStopPrice);
+            await this.orderService.updateTradeStatus(orderId, 'UPDATED');
+            logger.info(`Updated trailing stop for order: ${orderId} New stop: ${newStopPrice}`);
         } catch (error) {
             logger.error('Failed to update stop loss:', error);
         }

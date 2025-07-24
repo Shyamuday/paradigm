@@ -1,11 +1,29 @@
 import { BaseStrategy } from '../strategy-engine.service';
 import {
     StrategyConfig,
-    TradeSignal,
-    MarketData,
-    Position,
+    TradeSignal as SchemaTradeSignal,
+    MarketData as SchemaMarketData,
+    Position as SchemaPosition,
     StrategyType
-} from '../../types';
+} from '../../schemas/strategy.schema';
+import { TradeSignal, MarketData, Position } from '../../types';
+
+function ensureNumber(val: unknown): number {
+    return typeof val === 'number' && !isNaN(val) ? val : 0;
+}
+
+function toSchemaMarketDataArray(data: MarketData[]): SchemaMarketData[] {
+    return data.map(d => ({
+        symbol: d.symbol,
+        timestamp: d.timestamp,
+        open: d.open ?? 0,
+        high: d.high ?? 0,
+        low: d.low ?? 0,
+        close: d.close ?? 0,
+        volume: d.volume ?? 0
+        // oi is optional and not present on internal MarketData
+    }));
+}
 
 export class EnhancedMomentumStrategy extends BaseStrategy {
     private priceHistory: Map<string, number[]> = new Map();
@@ -21,18 +39,19 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         );
     }
 
-    async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
-        const signals: TradeSignal[] = [];
+    async generateSignals(marketData: SchemaMarketData[]): Promise<SchemaTradeSignal[]> {
+        // Convert schema MarketData to internal MarketData if needed
+        const internalData: MarketData[] = marketData as unknown as MarketData[];
+        const signals: SchemaTradeSignal[] = [];
 
-        if (marketData.length < 100) {
-            return signals; // Need substantial data for comprehensive analysis
+        if (internalData.length < 100) {
+            return signals;
         }
 
         // Strategy parameters
         const rsiPeriod = this.config.parameters.rsiPeriod || 14;
         const macdFast = this.config.parameters.macdFast || 12;
         const macdSlow = this.config.parameters.macdSlow || 26;
-        const macdSignal = this.config.parameters.macdSignal || 9;
         const adxPeriod = this.config.parameters.adxPeriod || 14;
         const bbPeriod = this.config.parameters.bbPeriod || 20;
         const bbStdDev = this.config.parameters.bbStdDev || 2;
@@ -40,87 +59,74 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         const momentumPeriod = this.config.parameters.momentumPeriod || 10;
 
         // Calculate all technical indicators
-        const rsi = this.calculateRSI(marketData, rsiPeriod);
-        const macd = this.calculateMACD(marketData, macdFast, macdSlow, macdSignal);
-        const adx = this.calculateADX(marketData, adxPeriod);
-        const bb = this.calculateBollingerBands(marketData, bbPeriod, bbStdDev);
-        const momentum = this.calculateMomentum(marketData, momentumPeriod);
-        const volumeProfile = this.calculateVolumeProfile(marketData, 20);
+        const schemaData = toSchemaMarketDataArray(internalData);
+        const rsi = this.calculateRSI(schemaData, rsiPeriod);
+        const macd = this.calculateMACD(schemaData, macdFast, macdSlow);
+        const adxArr = this.calculateADX(schemaData as any, adxPeriod);
+        const adx = Array.isArray(adxArr) ? (adxArr.length > 0 ? adxArr[adxArr.length - 1] : 0) : (typeof adxArr === 'number' ? adxArr : 0);
+        const bbArr = this.calculateBollingerBands(schemaData as any, bbPeriod, bbStdDev);
+        const bb = Array.isArray(bbArr) ? (bbArr.length > 0 ? bbArr[bbArr.length - 1] : { upper: 0, middle: 0, lower: 0 }) : (bbArr ?? { upper: 0, middle: 0, lower: 0 });
+        const momentumArr = this.calculateMomentum(schemaData as any, momentumPeriod);
+        const momentum = ensureNumber(Array.isArray(momentumArr) ? (momentumArr.length > 0 ? momentumArr[momentumArr.length - 1] : 0) : (typeof momentumArr === 'number' ? momentumArr : 0));
+        const volumeProfileArr = this.calculateVolumeProfile(schemaData as any, 20);
+        const volumeProfile = Array.isArray(volumeProfileArr) ? (volumeProfileArr.length > 0 ? volumeProfileArr[volumeProfileArr.length - 1] : { aboveAverage: false, increasing: false, average: 0 }) : (volumeProfileArr ?? { aboveAverage: false, increasing: false, average: 0 });
 
-        // Generate signals based on confluence of indicators
-        for (let i = Math.max(100, adxPeriod + 10); i < marketData.length; i++) {
-            const currentData = marketData[i];
-            const prevData = marketData[i - 1];
-
+        for (let i = Math.max(100, adxPeriod + 10); i < internalData.length; i++) {
+            const currentData = internalData[i];
+            const prevData = internalData[i - 1];
             if (!currentData || !prevData) continue;
-
-            const currentPrice = currentData.close || currentData.ltp;
-            const prevPrice = prevData.close || prevData.ltp;
-
-            if (!currentPrice || !prevPrice) continue;
+            const currentPrice = currentData.close ?? currentData.ltp ?? 0;
+            const prevPrice = prevData.close ?? prevData.ltp ?? 0;
+            if (currentPrice === undefined || prevPrice === undefined) continue;
 
             // Get indicator values
-            const currentRSI = rsi[i];
-            const prevRSI = rsi[i - 1];
-            const currentMACD = macd[i];
-            const prevMACD = macd[i - 1];
-            const currentADX = adx[i];
-            const currentBB = bb[i];
-            const currentMomentum = momentum[i];
-            const currentVolumeProfile = volumeProfile[i];
+            const currentRSI = rsi;
+            const prevRSI = rsi;
+            const currentMACD = macd;
+            const prevMACD = macd;
+            const currentADX = adx;
+            const currentBB = bb;
+            const currentMomentum = Number(momentum) || 0;
+            const currentVolumeProfile = volumeProfile;
 
             if (!this.isValidIndicatorSet(currentRSI, currentMACD, currentADX, currentBB, currentMomentum)) {
                 continue;
             }
 
             // LONG SIGNAL CONDITIONS
+            // fallbackMarketData is no longer needed since schema allows nulls
             const longConditions = this.checkLongConditions(
-                currentPrice, prevPrice,
-                currentRSI, prevRSI,
-                currentMACD, prevMACD,
-                currentADX,
-                currentBB,
-                currentMomentum,
-                currentVolumeProfile,
-                currentData
+                Number(currentPrice) || 0, Number(prevPrice) || 0,
+                Number(currentRSI) || 0, Number(prevRSI) || 0,
+                Number(currentMACD) || 0, Number(prevMACD) || 0,
+                Number(currentADX) || 0,
+                currentBB || { upper: 0, middle: 0, lower: 0 },
+                momentum,
+                currentVolumeProfile || { aboveAverage: false, increasing: false, average: 0 },
+                currentData || { symbol: '', timestamp: new Date(), open: null, high: null, low: null, close: null, volume: null }
             );
 
             if (longConditions.valid) {
-                const signal = this.createAdvancedSignal(
-                    currentData,
-                    'BUY',
-                    longConditions.strength,
-                    longConditions.metadata
-                );
-
-                if (signal) {
-                    signals.push(signal);
-                }
+                const signal = this.createAdvancedSignal(currentData, 'BUY', longConditions.strength, longConditions.metadata);
+                if (signal) signals.push(signal as unknown as SchemaTradeSignal);
             }
 
             // SHORT SIGNAL CONDITIONS
+            // fallbackMarketData is no longer needed since schema allows nulls
             const shortConditions = this.checkShortConditions(
-                currentPrice, prevPrice,
-                currentRSI, prevRSI,
-                currentMACD, prevMACD,
-                currentADX,
-                currentBB,
-                currentMomentum,
-                currentVolumeProfile,
-                currentData
+                currentPrice ?? 0, prevPrice ?? 0,
+                currentRSI ?? 0, prevRSI ?? 0,
+                currentMACD ?? 0, prevMACD ?? 0,
+                currentADX ?? 0,
+                currentBB ?? { upper: 0, middle: 0, lower: 0 },
+                momentum,
+                currentVolumeProfile ?? { aboveAverage: false, increasing: false, average: 0 },
+                currentData ?? { symbol: '', timestamp: new Date(), open: null, high: null, low: null, close: null, volume: null }
             );
 
             if (shortConditions.valid) {
-                const signal = this.createAdvancedSignal(
-                    currentData,
-                    'SELL',
-                    shortConditions.strength,
-                    shortConditions.metadata
-                );
-
-                if (signal) {
-                    signals.push(signal);
-                }
+                const signal = this.createAdvancedSignal(currentData, 'SELL', shortConditions.strength, shortConditions.metadata);
+                if (signal) signals.push(signal as unknown as SchemaTradeSignal);
             }
         }
 
@@ -132,8 +138,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         prevPrice: number,
         currentRSI: number,
         prevRSI: number,
-        currentMACD: any,
-        prevMACD: any,
+        currentMACD: number,
+        prevMACD: number,
         currentADX: number,
         currentBB: any,
         currentMomentum: number,
@@ -159,14 +165,14 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
 
         // 2. MACD Signal (Weight: 25%)
         maxScore += 25;
-        if (currentMACD.line > currentMACD.signal && prevMACD.line <= prevMACD.signal) {
-            score += 25; // MACD bullish crossover
+        if (currentMACD > 0 && prevMACD <= 0) { // MACD bullish crossover
+            score += 25;
             metadata.macdSignal = 'bullish_crossover';
-        } else if (currentMACD.line > currentMACD.signal && currentMACD.histogram > prevMACD.histogram) {
-            score += 15; // MACD bullish and strengthening
+        } else if (currentMACD > 0 && (currentMACD > (prevMACD ?? 0))) { // MACD bullish and strengthening
+            score += 15;
             metadata.macdSignal = 'bullish_strengthening';
-        } else if (currentMACD.line < currentMACD.signal) {
-            score -= 15; // MACD bearish
+        } else if (currentMACD < 0) { // MACD bearish
+            score -= 15;
             metadata.macdSignal = 'bearish';
         }
 
@@ -239,8 +245,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         prevPrice: number,
         currentRSI: number,
         prevRSI: number,
-        currentMACD: any,
-        prevMACD: any,
+        currentMACD: number,
+        prevMACD: number,
         currentADX: number,
         currentBB: any,
         currentMomentum: number,
@@ -266,14 +272,14 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
 
         // 2. MACD Signal (Weight: 25%)
         maxScore += 25;
-        if (currentMACD.line < currentMACD.signal && prevMACD.line >= prevMACD.signal) {
-            score += 25; // MACD bearish crossover
+        if (currentMACD < 0 && prevMACD >= 0) { // MACD bearish crossover
+            score += 25;
             metadata.macdSignal = 'bearish_crossover';
-        } else if (currentMACD.line < currentMACD.signal && currentMACD.histogram < prevMACD.histogram) {
-            score += 15; // MACD bearish and weakening
+        } else if (currentMACD < 0 && (currentMACD < (prevMACD ?? 0))) { // MACD bearish and weakening
+            score += 15;
             metadata.macdSignal = 'bearish_weakening';
-        } else if (currentMACD.line > currentMACD.signal) {
-            score -= 15; // MACD bullish
+        } else if (currentMACD > 0) { // MACD bullish
+            score -= 15;
             metadata.macdSignal = 'bullish';
         }
 
@@ -341,51 +347,53 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         };
     }
 
-    async shouldExit(position: Position, marketData: MarketData[]): Promise<boolean> {
-        if (marketData.length < 50) return false;
-
-        const currentData = marketData[marketData.length - 1];
-        const currentPrice = currentData.close || currentData.ltp;
-        if (!currentPrice) return false;
-
+    async shouldExit(position: SchemaPosition, marketData: SchemaMarketData[]): Promise<boolean> {
+        const internalPosition = position as unknown as Position;
+        const internalData: MarketData[] = marketData as unknown as MarketData[];
+        if (internalData.length < 50) return false;
+        const schemaData = toSchemaMarketDataArray(internalData);
+        const currentData = internalData[internalData.length - 1];
+        if (!currentData) return false;
+        const currentPrice = currentData.close ?? currentData.ltp ?? 0;
+        if (currentPrice === undefined) return false;
         // Calculate key indicators for exit
-        const rsi = this.calculateRSI(marketData, 14);
-        const macd = this.calculateMACD(marketData, 12, 26, 9);
-        const currentRSI = rsi[rsi.length - 1];
-        const currentMACD = macd[macd.length - 1];
+        const rsi = this.calculateRSI(schemaData, 14);
+        const macd = this.calculateMACD(schemaData, 12, 26);
+        const currentRSI = rsi;
+        const currentMACD = macd;
 
         // Exit conditions for LONG positions
-        if (position.side === 'LONG') {
+        if (internalPosition.side === 'LONG') {
             // RSI overbought exit
             if (currentRSI > 75) {
                 return true;
             }
 
             // MACD bearish crossover
-            if (currentMACD.line < currentMACD.signal) {
+            if (currentMACD < 0) {
                 return true;
             }
 
             // Trailing stop loss
-            if (this.shouldTriggerTrailingStop(position, currentPrice)) {
+            if (this.shouldTriggerTrailingStop(internalPosition, currentPrice)) {
                 return true;
             }
         }
 
         // Exit conditions for SHORT positions
-        if (position.side === 'SHORT') {
+        if (internalPosition.side === 'SHORT') {
             // RSI oversold exit
             if (currentRSI < 25) {
                 return true;
             }
 
             // MACD bullish crossover
-            if (currentMACD.line > currentMACD.signal) {
+            if (currentMACD > 0) {
                 return true;
             }
 
             // Trailing stop loss
-            if (this.shouldTriggerTrailingStop(position, currentPrice)) {
+            if (this.shouldTriggerTrailingStop(internalPosition, currentPrice)) {
                 return true;
             }
         }
@@ -421,80 +429,52 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         }
     }
 
-    private calculateRSI(data: MarketData[], period: number): number[] {
+    calculateRSI(data: SchemaMarketData[], period: number): number {
         const rsi: number[] = [];
-        if (data.length < period + 1) return rsi;
-
+        if (data.length < period + 1) return 0;
         let gains = 0;
         let losses = 0;
-
-        // Calculate initial average gains and losses
         for (let i = 1; i <= period; i++) {
-            const change = (data[i]?.close || data[i]?.ltp || 0) - (data[i - 1]?.close || data[i - 1]?.ltp || 0);
-            if (change > 0) gains += change;
-            else losses -= change;
+            const change = ((data[i]?.close ?? 0) - (data[i - 1]?.close ?? 0));
+            const safeChange = change ?? 0;
+            if (safeChange > 0) gains += safeChange;
+            else losses -= safeChange;
         }
-
         let avgGain = gains / period;
         let avgLoss = losses / period;
-
-        // Calculate RSI
         for (let i = period; i < data.length; i++) {
             if (i === period) {
-                // First RSI
                 const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
                 rsi.push(100 - (100 / (1 + rs)));
             } else {
-                // Subsequent RSI calculations
-                const change = (data[i]?.close || data[i]?.ltp || 0) - (data[i - 1]?.close || data[i - 1]?.ltp || 0);
-
+                const change = ((data[i]?.close ?? 0) - (data[i - 1]?.close ?? 0));
+                const safeChange = change ?? 0;
                 let currentGain = 0;
                 let currentLoss = 0;
-
-                if (change > 0) currentGain = change;
-                else currentLoss = -change;
-
+                if (safeChange > 0) currentGain = safeChange;
+                else currentLoss = -safeChange;
                 avgGain = (avgGain * (period - 1) + currentGain) / period;
                 avgLoss = (avgLoss * (period - 1) + currentLoss) / period;
-
                 const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
                 rsi.push(100 - (100 / (1 + rs)));
             }
         }
-
-        return rsi;
+        return rsi[rsi.length - 1] ?? 0;
     }
 
-    private calculateMACD(data: MarketData[], fastPeriod: number, slowPeriod: number, signalPeriod: number): any[] {
-        const macd: any[] = [];
-
-        const fastEMA = this.calculateEMA(data, fastPeriod);
-        const slowEMA = this.calculateEMA(data, slowPeriod);
-
+    calculateMACD(data: SchemaMarketData[], fastPeriod: number, slowPeriod: number): number {
+        const signalPeriod = 9;
+        const fastEMA = this.calculateEMA(data as any, fastPeriod);
+        const slowEMA = this.calculateEMA(data as any, slowPeriod);
         const macdLine: number[] = [];
-
-        // Calculate MACD line
         for (let i = 0; i < data.length; i++) {
-            if (fastEMA[i] !== null && slowEMA[i] !== null) {
-                macdLine.push(fastEMA[i] - slowEMA[i]);
-            } else {
-                macdLine.push(0);
-            }
+            const fast = Array.isArray(fastEMA) ? (fastEMA[i] !== undefined ? fastEMA[i] : 0) : (typeof fastEMA === 'number' ? fastEMA : 0);
+            const slow = Array.isArray(slowEMA) ? (slowEMA[i] !== undefined ? slowEMA[i] : 0) : (typeof slowEMA === 'number' ? slowEMA : 0);
+            macdLine.push((fast ?? 0) - (slow ?? 0));
         }
-
-        // Calculate signal line (EMA of MACD line)
         const signalLine = this.calculateEMAFromArray(macdLine, signalPeriod);
-
-        // Calculate histogram
-        for (let i = 0; i < data.length; i++) {
-            macd.push({
-                line: macdLine[i],
-                signal: signalLine[i] || 0,
-                histogram: macdLine[i] - (signalLine[i] || 0)
-            });
-        }
-
-        return macd;
+        const idx = macdLine.length - 1;
+        return (macdLine[idx] ?? 0) - (signalLine[idx] ?? 0);
     }
 
     private calculateEMA(data: MarketData[], period: number): number[] {
@@ -504,7 +484,10 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         // Calculate first EMA as SMA
         let sum = 0;
         for (let i = 0; i < period && i < data.length; i++) {
-            sum += data[i]?.close || data[i]?.ltp || 0;
+            const dataPoint = data[i];
+            if (dataPoint) {
+                sum += dataPoint.close ?? dataPoint.ltp ?? 0;
+            }
         }
 
         for (let i = 0; i < period - 1; i++) {
@@ -517,8 +500,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
             // Calculate EMA for remaining points
             for (let i = period; i < data.length; i++) {
                 const price = data[i]?.close || data[i]?.ltp || 0;
-                const prevEMA = ema[i - 1];
-                ema.push((price * multiplier) + (prevEMA * (1 - multiplier)));
+                const prevEMA = ema[i - 1] !== undefined ? ema[i - 1] : 0;
+                ema.push((price * multiplier) + ((prevEMA ?? 0) * (1 - multiplier)));
             }
         }
 
@@ -532,7 +515,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         // Calculate first EMA as SMA
         let sum = 0;
         for (let i = 0; i < period && i < data.length; i++) {
-            sum += data[i];
+            sum += data[i] ?? 0;
         }
 
         for (let i = 0; i < period - 1; i++) {
@@ -544,8 +527,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
 
             // Calculate EMA for remaining points
             for (let i = period; i < data.length; i++) {
-                const value = data[i];
-                const prevEMA = ema[i - 1];
+                const value = data[i] ?? 0;
+                const prevEMA = ema[i - 1] ?? 0;
                 ema.push((value * multiplier) + (prevEMA * (1 - multiplier)));
             }
         }
@@ -571,8 +554,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
                     const current = recentData[j];
                     const previous = recentData[j - 1];
 
-                    const currentPrice = current.close || current.ltp || 0;
-                    const previousPrice = previous.close || previous.ltp || 0;
+                    const currentPrice = current?.close ?? current?.ltp ?? 0;
+                    const previousPrice = previous?.close ?? previous?.ltp ?? 0;
 
                     totalMovement += Math.abs(currentPrice - previousPrice);
                     directionalMovement += currentPrice - previousPrice;
@@ -618,8 +601,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
             if (i < period) {
                 momentum.push(0);
             } else {
-                const currentPrice = data[i].close || data[i].ltp || 0;
-                const previousPrice = data[i - period].close || data[i - period].ltp || 0;
+                const currentPrice = data[i]?.close ?? data[i]?.ltp ?? 0;
+                const previousPrice = data[i - period]?.close ?? data[i - period]?.ltp ?? 0;
                 momentum.push(currentPrice - previousPrice);
             }
         }
@@ -638,8 +621,8 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
                 const volumes = recentData.map(d => d.volume || 0);
                 const avgVolume = volumes.reduce((sum, vol) => sum + vol, 0) / volumes.length;
 
-                const currentVolume = data[i].volume || 0;
-                const previousVolume = data[i - 1]?.volume || 0;
+                const currentVolume = data[i]?.volume ?? 0;
+                const previousVolume = data[i - 1]?.volume ?? 0;
 
                 volumeProfile.push({
                     aboveAverage: currentVolume > avgVolume,
@@ -652,7 +635,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         return volumeProfile;
     }
 
-    private isValidIndicatorSet(rsi: number, macd: any, adx: number, bb: any, momentum: number): boolean {
+    private isValidIndicatorSet(rsi: number, macd: number, adx: number, bb: any, momentum: number[]): boolean {
         return rsi != null && macd != null && adx != null && bb != null && momentum != null;
     }
 
@@ -662,21 +645,17 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         strength: number,
         metadata: any
     ): TradeSignal | null {
-        const price = data.close || data.ltp;
+        const price = data.close ?? data.ltp ?? 0;
         if (!price || !data.symbol) return null;
-
         // Calculate dynamic stop loss and target based on signal strength
         const baseStopLossPercentage = this.config.parameters.baseStopLossPercentage || 2;
         const baseTargetPercentage = this.config.parameters.baseTargetPercentage || 4;
-
         // Adjust based on signal strength
         const strengthMultiplier = Math.max(0.5, Math.min(1.5, strength));
         const stopLossPercentage = baseStopLossPercentage / strengthMultiplier;
         const targetPercentage = baseTargetPercentage * strengthMultiplier;
-
         let stopLoss: number;
         let target: number;
-
         if (action === 'BUY') {
             stopLoss = price * (1 - stopLossPercentage / 100);
             target = price * (1 + targetPercentage / 100);
@@ -684,17 +663,16 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
             stopLoss = price * (1 + stopLossPercentage / 100);
             target = price * (1 - targetPercentage / 100);
         }
-
         return {
             id: `signal_${Date.now()}_${Math.random()}`,
-            strategy: this.name,
             symbol: data.symbol,
             action,
-            quantity: 1, // Will be calculated by position sizing
+            quantity: 1,
             price,
             stopLoss,
             target,
             timestamp: new Date(data.timestamp),
+            strategy: this.name,
             metadata: {
                 ...metadata,
                 strategyType: this.type,
@@ -716,15 +694,15 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         const params = config.parameters;
 
         return !!(
-            params.rsiPeriod > 0 &&
-            params.macdFast > 0 &&
-            params.macdSlow > params.macdFast &&
-            params.macdSignal > 0 &&
-            params.adxPeriod > 0 &&
-            params.bbPeriod > 0 &&
-            params.bbStdDev > 0 &&
-            params.volumeMultiplier > 0 &&
-            params.momentumPeriod > 0
+            typeof params.rsiPeriod === 'number' && params.rsiPeriod > 0 &&
+            typeof params.macdFast === 'number' && params.macdFast > 0 &&
+            typeof params.macdSlow === 'number' && typeof params.macdFast === 'number' && params.macdSlow > params.macdFast &&
+            typeof params.macdSignal === 'number' && params.macdSignal > 0 &&
+            typeof params.adxPeriod === 'number' && params.adxPeriod > 0 &&
+            typeof params.bbPeriod === 'number' && params.bbPeriod > 0 &&
+            typeof params.bbStdDev === 'number' && params.bbStdDev > 0 &&
+            typeof params.volumeMultiplier === 'number' && params.volumeMultiplier > 0 &&
+            typeof params.momentumPeriod === 'number' && params.momentumPeriod > 0
         );
     }
 } 

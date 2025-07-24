@@ -103,7 +103,7 @@ export class SecurityValidator extends EventEmitter2 {
     this.auditLog = [];
 
     this.initializeDefaultRules();
-    
+
     logger.info('Security validator initialized', {
       config: this.config,
       rulesCount: this.validationRules.size
@@ -264,7 +264,7 @@ export class SecurityValidator extends EventEmitter2 {
 
       const securityLevel = errors.length > 0 ? SecurityLevel.HIGH : SecurityLevel.LOW;
       const result = this.createValidationResult(errors.length === 0, errors, securityLevel, context);
-      
+
       // Add sanitized data to context
       if (rule.sanitize || rule.encrypt) {
         result.context.sanitizedData = sanitizedData;
@@ -282,7 +282,7 @@ export class SecurityValidator extends EventEmitter2 {
     } catch (error) {
       const errorMessage = `Validation error for ${ruleName}: ${(error as Error).message}`;
       logger.error(errorMessage, { ruleName, data, context, error });
-      
+
       return this.createValidationResult(false, [errorMessage], SecurityLevel.CRITICAL, context);
     }
   }
@@ -341,15 +341,15 @@ export class SecurityValidator extends EventEmitter2 {
    */
   private validateLength(data: any, rule: ValidationRule): string | null {
     const length = String(data).length;
-    
+
     if (rule.minLength !== undefined && length < rule.minLength) {
       return `Minimum length is ${rule.minLength}, got ${length}`;
     }
-    
+
     if (rule.maxLength !== undefined && length > rule.maxLength) {
       return `Maximum length is ${rule.maxLength}, got ${length}`;
     }
-    
+
     return null;
   }
 
@@ -358,15 +358,15 @@ export class SecurityValidator extends EventEmitter2 {
    */
   private validateRange(data: any, rule: ValidationRule): string | null {
     const num = Number(data);
-    
+
     if (rule.min !== undefined && num < rule.min) {
       return `Minimum value is ${rule.min}, got ${num}`;
     }
-    
+
     if (rule.max !== undefined && num > rule.max) {
       return `Maximum value is ${rule.max}, got ${num}`;
     }
-    
+
     return null;
   }
 
@@ -440,17 +440,17 @@ export class SecurityValidator extends EventEmitter2 {
     if (typeof data === 'string') {
       // Remove HTML tags
       data = data.replace(/<[^>]*>/g, '');
-      
+
       // Remove script tags and content
       data = data.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-      
+
       // Remove dangerous characters
       data = data.replace(/[<>\"'&]/g, '');
-      
+
       // Trim whitespace
       data = data.trim();
     }
-    
+
     return data;
   }
 
@@ -514,7 +514,12 @@ export class SecurityValidator extends EventEmitter2 {
 
       // Check token expiration (basic check)
       try {
-        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+        const tokenPayload = tokenParts[1];
+        if (!tokenPayload) {
+          errors.push('Invalid token payload');
+          return this.createValidationResult(false, errors, SecurityLevel.CRITICAL, context);
+        }
+        const payload = JSON.parse(Buffer.from(tokenPayload, 'base64').toString()) as { exp?: number };
         if (payload.exp && Date.now() >= payload.exp * 1000) {
           errors.push('Token has expired');
           return this.createValidationResult(false, errors, SecurityLevel.HIGH, context);
@@ -534,7 +539,7 @@ export class SecurityValidator extends EventEmitter2 {
     } catch (error) {
       const errorMessage = `Authentication validation error: ${(error as Error).message}`;
       logger.error(errorMessage, { context, error });
-      
+
       return this.createValidationResult(false, [errorMessage], SecurityLevel.CRITICAL, context);
     }
   }
@@ -579,7 +584,7 @@ export class SecurityValidator extends EventEmitter2 {
     } catch (error) {
       const errorMessage = `Authorization validation error: ${(error as Error).message}`;
       logger.error(errorMessage, { userId, resource, action, context, error });
-      
+
       return this.createValidationResult(false, [errorMessage], SecurityLevel.CRITICAL, context);
     }
   }
@@ -604,7 +609,7 @@ export class SecurityValidator extends EventEmitter2 {
       } else {
         // Increment count
         record.count++;
-        
+
         if (record.count > this.config.rateLimitMax) {
           errors.push(`Rate limit exceeded. Maximum ${this.config.rateLimitMax} requests per ${this.config.rateLimitWindow / 1000 / 60} minutes`);
           return this.createValidationResult(false, errors, SecurityLevel.HIGH, context);
@@ -622,7 +627,7 @@ export class SecurityValidator extends EventEmitter2 {
     } catch (error) {
       const errorMessage = `Rate limit check error: ${(error as Error).message}`;
       logger.error(errorMessage, { identifier, context, error });
-      
+
       return this.createValidationResult(false, [errorMessage], SecurityLevel.CRITICAL, context);
     }
   }
@@ -660,7 +665,7 @@ export class SecurityValidator extends EventEmitter2 {
     } catch (error) {
       const errorMessage = `Login attempts check error: ${(error as Error).message}`;
       logger.error(errorMessage, { identifier, context, error });
-      
+
       return this.createValidationResult(false, [errorMessage], SecurityLevel.CRITICAL, context);
     }
   }
@@ -712,7 +717,7 @@ export class SecurityValidator extends EventEmitter2 {
     // Check for unusual resource access patterns
     // Check for admin actions from non-admin users
     // This is a basic implementation - enhance based on your security requirements
-    
+
     const suspiciousPatterns = [
       /admin/i,
       /delete/i,
@@ -721,7 +726,7 @@ export class SecurityValidator extends EventEmitter2 {
       /script/i
     ];
 
-    return suspiciousPatterns.some(pattern => 
+    return suspiciousPatterns.some(pattern =>
       pattern.test(resource) || pattern.test(action)
     );
   }

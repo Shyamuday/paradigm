@@ -6,15 +6,17 @@ import { ZerodhaAuth } from '../auth/zerodha-auth';
 import { MarketDataService } from '../services/market-data.service';
 import { StrategyService } from '../services/strategy.service';
 import { OrderManagerService } from '../services/order-manager.service';
+import { InstrumentsManager } from '../services/instruments-manager.service';
+import { ConfigManager } from '../config/config-manager';
 
 /**
  * Enhanced Trading Example demonstrating the use of new packages and services
  */
 export class EnhancedTradingExample {
-  private auth: ZerodhaAuth;
-  private marketData: MarketDataService;
-  private strategy: StrategyService;
-  private orderManager: OrderManagerService;
+  private auth!: ZerodhaAuth;
+  private marketData!: MarketDataService;
+  private strategy!: StrategyService;
+  private orderManager!: OrderManagerService;
   private isRunning = false;
 
   constructor() {
@@ -33,13 +35,13 @@ export class EnhancedTradingExample {
 
       // Initialize authentication
       this.auth = new ZerodhaAuth();
-      await this.auth.initialize();
       logger.info('Authentication initialized');
 
       // Initialize services
-      this.marketData = new MarketDataService();
-      this.strategy = new StrategyService();
-      this.orderManager = new OrderManagerService();
+      const instrumentsManager = new InstrumentsManager(this.auth);
+      this.marketData = new MarketDataService(instrumentsManager, this.auth.getKite());
+      this.strategy = new StrategyService(new ConfigManager());
+      this.orderManager = new OrderManagerService(this.auth.getKite(), 'session_' + Date.now());
 
       // Add trading jobs to scheduler
       this.setupTradingJobs();
@@ -113,7 +115,7 @@ export class EnhancedTradingExample {
   async refreshMarketData(): Promise<void> {
     try {
       logger.info('Refreshing market data...');
-      
+
       // Simulate market data fetch
       const symbols = ['RELIANCE', 'TCS', 'INFY', 'HDFC', 'ICICIBANK'];
       const marketData = [];
@@ -135,7 +137,7 @@ export class EnhancedTradingExample {
       for (const data of marketData) {
         const prices = [data.close, data.ltp, data.high, data.low];
         const stats = mathUtils.calculateStatistics(prices);
-        
+
         logger.debug(`Market data for ${data.symbol}`, {
           price: data.ltp,
           volume: data.volume,
@@ -149,7 +151,7 @@ export class EnhancedTradingExample {
 
       // Record performance metric
       performanceMonitor.recordMetric('market_data_refresh_success', 1, 'count');
-      
+
     } catch (error) {
       logger.error('Error refreshing market data', error);
       performanceMonitor.recordMetric('market_data_refresh_error', 1, 'count');
@@ -163,14 +165,14 @@ export class EnhancedTradingExample {
 
       // Simulate strategy execution
       const strategies = ['Moving Average Crossover', 'RSI Strategy', 'Breakout Strategy'];
-      
+
       for (const strategyName of strategies) {
         await performanceMonitor.measureAsync(
           `${tradingMetrics.STRATEGY_EXECUTION}_${strategyName}`,
           async () => {
             // Simulate strategy analysis
             const prices = Array.from({ length: 20 }, () => 1000 + Math.random() * 100);
-            
+
             // Calculate technical indicators
             const sma = mathUtils.calculateMovingAverage(prices, 10);
             const rsi = mathUtils.calculateRSI(prices, 14);
@@ -178,10 +180,10 @@ export class EnhancedTradingExample {
 
             // Generate trading signal
             const signal = this.generateTradingSignal(strategyName, prices, sma, rsi, macd);
-            
+
             if (signal) {
               logger.info(`Strategy ${strategyName} generated signal`, signal);
-              
+
               // Record signal generation performance
               performanceMonitor.recordMetric(
                 tradingMetrics.STRATEGY_SIGNAL_GENERATION,
@@ -195,7 +197,7 @@ export class EnhancedTradingExample {
 
       // Record strategy execution success
       performanceMonitor.recordMetric('strategy_execution_success', 1, 'count');
-      
+
     } catch (error) {
       logger.error('Error executing strategies', error);
       performanceMonitor.recordMetric('strategy_execution_error', 1, 'count');
@@ -210,11 +212,28 @@ export class EnhancedTradingExample {
     rsi: number[],
     macd: { macd: number[]; signal: number[]; histogram: number[] }
   ): any {
-    const currentPrice = prices[prices.length - 1];
-    const currentSMA = sma[sma.length - 1];
-    const currentRSI = rsi[rsi.length - 1];
-    const currentMACD = macd.macd[macd.macd.length - 1];
-    const currentSignal = macd.signal[macd.signal.length - 1];
+    const currentPrice = prices[prices.length - 1] ?? 0;
+    const currentSMA = sma.length > 0 ? sma[sma.length - 1] ?? 0 : 0;
+    const currentRSI = rsi.length > 0 ? rsi[rsi.length - 1] ?? 0 : 0;
+    const currentMACD = macd.macd.length > 0 ? macd.macd[macd.macd.length - 1] ?? 0 : 0;
+    const currentSignal = macd.signal.length > 0 ? macd.signal[macd.signal.length - 1] ?? 0 : 0;
+
+    if (
+      currentPrice === undefined ||
+      currentSMA === undefined ||
+      currentRSI === undefined ||
+      currentMACD === undefined ||
+      currentSignal === undefined
+    ) {
+      logger.warn('Insufficient data for trading signal', {
+        currentPrice,
+        currentSMA,
+        currentRSI,
+        currentMACD,
+        currentSignal
+      });
+      return null;
+    }
 
     let action = 'HOLD';
     let confidence = 0;
@@ -371,7 +390,7 @@ export class EnhancedTradingExample {
   private generatePerformanceReport(): void {
     try {
       const report = performanceMonitor.generateReport();
-      
+
       logger.info('Performance Report', {
         timestamp: report.timestamp,
         systemMetrics: {
@@ -427,7 +446,7 @@ export const enhancedTradingExample = new EnhancedTradingExample();
 export async function runEnhancedTradingExample(): Promise<void> {
   try {
     await enhancedTradingExample.start();
-    
+
     // Run for 5 minutes
     setTimeout(async () => {
       await enhancedTradingExample.stop();

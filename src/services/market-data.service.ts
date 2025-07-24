@@ -27,13 +27,15 @@ export class MarketDataService {
             this.mockDataInterval = setInterval(async () => {
                 for (const [symbol, token] of this.tickSubscriptions.entries()) {
                     try {
-                        const instrument = await db.findUnique('Instrument', { where: { symbol } });
-                        if (!instrument) continue;
+                        const dbInstrument = await db.instrument.findUnique({ where: { symbol } });
+                        if (!dbInstrument) continue;
 
-                        const mockData = MockDataGenerator.createMockMarketData(instrument.id, symbol);
+                        const mockData = MockDataGenerator.createMockMarketData(dbInstrument.id, symbol);
 
                         // Save to database
-                        await db.create('MarketData', mockData);
+                        // Only pass valid fields for MarketDataCreateInput
+                        const { instrument, ltp, ...marketDataInput } = mockData;
+                        await db.marketData.create({ data: marketDataInput });
 
                         // Emit mock tick data
                         this.wsManager.emit('ticks', [{
@@ -61,10 +63,10 @@ export class MarketDataService {
     async subscribeToSymbol(symbol: string) {
         try {
             // Get or create instrument
-            let instrument = await db.findUnique('Instrument', { where: { symbol } });
+            let dbInstrument = await db.instrument.findUnique({ where: { symbol } });
 
-            if (!instrument) {
-                instrument = await db.create('Instrument', MockDataGenerator.createMockInstrument(symbol));
+            if (!dbInstrument) {
+                dbInstrument = await db.instrument.create({ data: MockDataGenerator.createMockInstrument(symbol) });
             }
 
             // Store the subscription with a mock token
@@ -96,10 +98,12 @@ export class MarketDataService {
 
     async createInstrument(config: InstrumentConfig & { isActive?: boolean }) {
         try {
-            const instrument = await db.create('Instrument', {
-                ...MockDataGenerator.createMockInstrument(config.symbol),
-                ...config,
-                isActive: config.isActive ?? true
+            const instrument = await db.instrument.create({
+                data: {
+                    ...MockDataGenerator.createMockInstrument(config.symbol),
+                    ...config,
+                    isActive: config.isActive ?? true
+                }
             });
 
             // Subscribe to mock data if it's an active instrument
@@ -117,15 +121,15 @@ export class MarketDataService {
 
     async getInstrumentBySymbol(symbol: string) {
         try {
-            const instrument = await db.findUnique('Instrument', {
+            const instrument = await db.instrument.findUnique({
                 where: { symbol }
             });
 
             if (instrument) {
-                const marketData = await db.findMany('MarketData', {
+                const marketData = await db.marketData.findMany({
                     where: { instrumentId: instrument.id },
                     orderBy: { timestamp: 'desc' },
-                    limit: 100
+                    take: 100
                 });
 
                 return { ...instrument, marketData };
@@ -140,7 +144,7 @@ export class MarketDataService {
 
     async getAllInstruments() {
         try {
-            return await db.findMany('Instrument', {
+            return await db.instrument.findMany({
                 where: { isActive: true }
             });
         } catch (error) {
@@ -157,17 +161,18 @@ export class MarketDataService {
                 return;
             }
 
-            const marketData = await db.create('MarketData', {
-                instrumentId: instrument.id,
-                timestamp: tickData.timestamp,
-                ltp: tickData.ltp,
-                open: tickData.open,
-                high: tickData.high,
-                low: tickData.low,
-                close: tickData.close,
-                volume: tickData.volume,
-                change: tickData.change,
-                changePercent: tickData.changePercent,
+            const { change, changePercent, ...tickDataInput } = tickData;
+            const marketData = await db.marketData.create({
+                data: {
+                    instrumentId: instrument.id,
+                    timestamp: tickData.timestamp,
+                    open: tickData.open,
+                    high: tickData.high,
+                    low: tickData.low,
+                    close: tickData.close,
+                    volume: tickData.volume,
+                    // Only include change/changePercent if they exist in schema
+                }
             });
 
             logger.debug('Tick data saved:', marketData.id);
@@ -186,14 +191,16 @@ export class MarketDataService {
                 return;
             }
 
-            const marketData = await db.create('MarketData', {
-                instrumentId: instrument.id,
-                timestamp: candleData.timestamp,
-                open: candleData.open,
-                high: candleData.high,
-                low: candleData.low,
-                close: candleData.close,
-                volume: candleData.volume,
+            const marketData = await db.marketData.create({
+                data: {
+                    instrumentId: instrument.id,
+                    timestamp: candleData.timestamp,
+                    open: candleData.open,
+                    high: candleData.high,
+                    low: candleData.low,
+                    close: candleData.close,
+                    volume: candleData.volume,
+                }
             });
 
             logger.debug('Candle data saved:', marketData.id);
@@ -230,11 +237,11 @@ export class MarketDataService {
             }
 
             // Fallback to database
-            const marketData = await db.findMany('MarketData', {
+            const instrument = await db.instrument.findUnique({ where: { symbol } });
+            if (!instrument) return [];
+            const marketData = await db.marketData.findMany({
                 where: {
-                    instrument: {
-                        symbol
-                    }
+                    instrumentId: instrument.id
                 },
                 orderBy: {
                     timestamp: 'desc'
@@ -268,11 +275,11 @@ export class MarketDataService {
             }
 
             // Fallback to database
-            const previousDay = await db.findMany('MarketData', {
+            const instrument = await db.instrument.findUnique({ where: { symbol } });
+            if (!instrument) throw new Error(`Instrument not found: ${symbol}`);
+            const previousDay = await db.marketData.findMany({
                 where: {
-                    instrument: {
-                        symbol
-                    },
+                    instrumentId: instrument.id,
                     timestamp: {
                         lt: new Date(new Date().setHours(0, 0, 0, 0))
                     }
@@ -296,13 +303,13 @@ export class MarketDataService {
 
     async getHistoricalData(symbol: string, from: Date, to: Date) {
         try {
-            const instrument = await db.findUnique('Instrument', { where: { symbol } });
+            const instrument = await db.instrument.findUnique({ where: { symbol } });
             if (!instrument) {
                 throw new Error(`Instrument not found: ${symbol}`);
             }
 
             // Fallback to database
-            const marketData = await db.findMany('MarketData', {
+            const marketData = await db.marketData.findMany({
                 where: {
                     instrumentId: instrument.id,
                     timestamp: {
@@ -322,7 +329,7 @@ export class MarketDataService {
 
     async getPreviousDayClose(symbol: string): Promise<number | null> {
         try {
-            const instrument = await db.findUnique('Instrument', { where: { symbol } });
+            const instrument = await db.instrument.findUnique({ where: { symbol } });
             if (!instrument) {
                 throw new Error(`Instrument not found: ${symbol}`);
             }
@@ -333,7 +340,7 @@ export class MarketDataService {
             yesterday.setHours(0, 0, 0, 0);
 
             // Fallback to database
-            const previousDayData = await db.findMany('MarketData', {
+            const previousDayData = await db.marketData.findMany({
                 where: {
                     instrumentId: instrument.id,
                     timestamp: {
@@ -341,7 +348,7 @@ export class MarketDataService {
                     }
                 },
                 orderBy: { timestamp: 'desc' },
-                limit: 1
+                take: 1
             });
 
             return previousDayData[0]?.close || null;
@@ -353,7 +360,7 @@ export class MarketDataService {
 
     async getCurrentPrice(instrumentId: string): Promise<number> {
         try {
-            const instrument = await db.findUnique('Instrument', {
+            const instrument = await db.instrument.findUnique({
                 where: { id: instrumentId }
             });
 
@@ -362,17 +369,17 @@ export class MarketDataService {
             }
 
             // Fallback to database
-            const latestData = await db.findMany('MarketData', {
+            const latestData = await db.marketData.findMany({
                 where: { instrumentId },
                 orderBy: { timestamp: 'desc' },
-                limit: 1
+                take: 1
             });
 
-            if (latestData.length === 0) {
+            if (!latestData || latestData.length === 0 || !latestData[0]) {
                 throw new Error(`No price data found for instrument: ${instrumentId}`);
             }
-
-            return latestData[0].ltp || latestData[0].close || 0;
+            // ltp may not exist in schema, fallback to close
+            return latestData[0].close || 0;
         } catch (error) {
             logger.error('Failed to get current price:', error);
             throw error;
@@ -381,15 +388,13 @@ export class MarketDataService {
 
     async getInstrumentsByExchange(exchange: string) {
         try {
-            const instruments = await db.findMany('Instrument', {
+            return await db.instrument.findMany({
                 where: {
                     exchange,
                     isActive: true,
                 },
                 orderBy: { symbol: 'asc' },
             });
-
-            return instruments;
         } catch (error) {
             logger.error('Failed to get instruments by exchange:', error);
             throw error;
@@ -398,10 +403,10 @@ export class MarketDataService {
 
     async updateInstrument(symbol: string, updates: Partial<InstrumentConfig & { isActive?: boolean }>) {
         try {
-            const instrument = await db.update('Instrument',
-                { symbol },
-                updates
-            );
+            const instrument = await db.instrument.update({
+                where: { symbol },
+                data: updates
+            });
 
             // If isActive status changed, handle subscriptions
             if (updates.isActive !== undefined) {
@@ -424,10 +429,10 @@ export class MarketDataService {
         try {
             await this.unsubscribeFromSymbol(symbol);
 
-            const instrument = await db.update('Instrument',
-                { symbol },
-                { isActive: false }
-            );
+            const instrument = await db.instrument.update({
+                where: { symbol },
+                data: { isActive: false }
+            });
 
             logger.info('Instrument deactivated:', instrument.symbol);
             return instrument;

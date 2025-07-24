@@ -30,12 +30,12 @@ describe('Simple Trading Bot Test', () => {
     });
 
     it('should handle arrays correctly', () => {
-      const numbers = [1, 2, 3, 4, 5];
+      const numbers: Array<number> = [1, 2, 3, 4, 5];
       expect(numbers.length).toBe(5);
       expect(numbers[0]).toBe(1);
       expect(numbers[4]).toBe(5);
-      
-      const sum = numbers.reduce((acc, val) => acc + val, 0);
+
+      const sum = numbers.reduce((acc: number, val: number): number => acc + val, 0);
       expect(sum).toBe(15);
     });
 
@@ -45,7 +45,7 @@ describe('Simple Trading Bot Test', () => {
         value: 42,
         active: true
       };
-      
+
       expect(testObject.name).toBe('test');
       expect(testObject.value).toBe(42);
       expect(testObject.active).toBe(true);
@@ -67,13 +67,13 @@ describe('Simple Trading Bot Test', () => {
     it('should calculate simple moving average', () => {
       const prices = [10, 12, 14, 16, 18];
       const period = 3;
-      
+
       const sma = [];
       for (let i = period - 1; i < prices.length; i++) {
         const sum = prices.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
         sma.push(sum / period);
       }
-      
+
       expect(sma).toHaveLength(3);
       expect(sma[0]).toBe(12); // (10 + 12 + 14) / 3
       expect(sma[1]).toBe(14); // (12 + 14 + 16) / 3
@@ -83,7 +83,7 @@ describe('Simple Trading Bot Test', () => {
     it('should calculate price change percentage', () => {
       const oldPrice = 100;
       const newPrice = 110;
-      
+
       const changePercent = ((newPrice - oldPrice) / oldPrice) * 100;
       expect(changePercent).toBe(10);
     });
@@ -91,7 +91,7 @@ describe('Simple Trading Bot Test', () => {
     it('should determine buy/sell signals', () => {
       const currentPrice = 100;
       const movingAverage = 95;
-      
+
       // Simple strategy: buy if price > MA, sell if price < MA
       const signal = currentPrice > movingAverage ? 'BUY' : 'SELL';
       expect(signal).toBe('BUY');
@@ -101,7 +101,7 @@ describe('Simple Trading Bot Test', () => {
       const capital = 10000;
       const riskPerTrade = 0.02; // 2% risk per trade
       const stopLoss = 0.05; // 5% stop loss
-      
+
       const positionSize = (capital * riskPerTrade) / stopLoss;
       expect(positionSize).toBe(4000);
     });
@@ -114,7 +114,7 @@ describe('Simple Trading Bot Test', () => {
         if (stopLoss >= price) return false;
         return true;
       };
-      
+
       expect(validateTrade(100, 10, 95)).toBe(true);
       expect(validateTrade(100, 10, 105)).toBe(false); // Stop loss above price
       expect(validateTrade(0, 10, 95)).toBe(false); // Invalid price
@@ -130,13 +130,13 @@ describe('Simple Trading Bot Test', () => {
         { price: 100, volume: 0, timestamp: Date.now() }, // Invalid volume
         { price: 100, volume: 1000, timestamp: Date.now() }
       ];
-      
-      const validData = data.filter(item => 
-        item.price > 0 && 
-        item.volume > 0 && 
+
+      const validData = data.filter(item =>
+        item.price > 0 &&
+        item.volume > 0 &&
         item.timestamp > 0
       );
-      
+
       expect(validData).toHaveLength(2);
     });
 
@@ -146,12 +146,12 @@ describe('Simple Trading Bot Test', () => {
         { timestamp: 500, value: 'second' },
         { timestamp: 100, value: 'first' }
       ];
-      
+
       const sortedData = data.sort((a, b) => a.timestamp - b.timestamp);
-      
-      expect(sortedData[0].value).toBe('first');
-      expect(sortedData[1].value).toBe('second');
-      expect(sortedData[2].value).toBe('third');
+
+      expect(sortedData[0] && sortedData[0].value ? sortedData[0].value : '').toBe('first');
+      expect(sortedData[1] && sortedData[1].value ? sortedData[1].value : '').toBe('second');
+      expect(sortedData[2] && sortedData[2].value ? sortedData[2].value : '').toBe('third');
     });
 
     it('should group data by symbol', () => {
@@ -161,15 +161,17 @@ describe('Simple Trading Bot Test', () => {
         { symbol: 'AAPL', price: 151 },
         { symbol: 'MSFT', price: 300 }
       ];
-      
+
       const grouped = trades.reduce((acc, trade) => {
         if (!acc[trade.symbol]) {
           acc[trade.symbol] = [];
         }
-        acc[trade.symbol].push(trade);
+        if (trade) {
+          acc[trade.symbol].push(trade);
+        }
         return acc;
-      }, {} as Record<string, typeof trades>);
-      
+      }, {} as Record<string, any[]>);
+
       expect(Object.keys(grouped)).toHaveLength(3);
       expect(grouped.AAPL?.length).toBe(2);
       expect(grouped.GOOGL?.length).toBe(1);
@@ -180,46 +182,46 @@ describe('Simple Trading Bot Test', () => {
   describe('Performance Tests', () => {
     it('should process data efficiently', () => {
       const startTime = Date.now();
-      
+
       // Simulate processing 1000 data points
       const data = Array.from({ length: 1000 }, (_, i) => ({
         price: 100 + i * 0.1,
         volume: 1000000 + i * 1000,
         timestamp: Date.now() - (1000 - i) * 60000
       }));
-      
+
       // Simple processing
       const processed = data.map(item => ({
         ...item,
         priceChange: item.price - 100,
         volumeChange: item.volume - 1000000
       }));
-      
+
       const endTime = Date.now();
-      
+
       expect(processed).toHaveLength(1000);
       expect(endTime - startTime).toBeLessThan(1000); // Should complete in under 1 second
     });
 
     it('should handle memory efficiently', () => {
       const initialMemory = process.memoryUsage().heapUsed;
-      
+
       // Create large dataset
       const largeArray = Array.from({ length: 10000 }, (_, i) => ({
         id: i,
         data: `data_${i}`,
         value: Math.random()
       }));
-      
+
       // Process and discard
       const processed = largeArray.map(item => ({
         ...item,
         processed: true
       }));
-      
+
       const finalMemory = process.memoryUsage().heapUsed;
       const memoryIncrease = finalMemory - initialMemory;
-      
+
       expect(processed).toHaveLength(10000);
       expect(memoryIncrease).toBeLessThan(50 * 1024 * 1024); // Less than 50MB increase
     });
@@ -231,7 +233,7 @@ describe('Simple Trading Bot Test', () => {
         if (b === 0) return null;
         return a / b;
       };
-      
+
       expect(safeDivide(10, 2)).toBe(5);
       expect(safeDivide(10, 0)).toBeNull();
     });
@@ -241,7 +243,7 @@ describe('Simple Trading Bot Test', () => {
         if (index < 0 || index >= arr.length) return null;
         return arr[index];
       };
-      
+
       const arr = [1, 2, 3];
       expect(safeGet(arr, 1)).toBe(2);
       expect(safeGet(arr, -1)).toBeNull();
@@ -256,7 +258,7 @@ describe('Simple Trading Bot Test', () => {
           return null;
         }
       };
-      
+
       expect(safeParse('{"key": "value"}')).toEqual({ key: 'value' });
       expect(safeParse('invalid json')).toBeNull();
     });

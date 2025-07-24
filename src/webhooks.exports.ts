@@ -1,4 +1,3 @@
 // Webhooks Exports
-// Remove or correct these exports if the symbols do not exist
-// export { startWebhook } from './webhooks/start-webhook';
-// export { handleOrderUpdate } from './webhooks/order-updates'; 
+export { OrderUpdateHandler, OrderUpdate } from './webhooks/order-updates';
+// No startWebhook or handleOrderUpdate export available 

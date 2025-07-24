@@ -15,7 +15,7 @@ export class OrderManagerService {
     async placeOrder(signal: TradeSignal): Promise<string> {
         try {
             // Get instrument details
-            const instrument = await db.findUnique('Instrument', { symbol: signal.symbol });
+            const instrument = await db.instrument.findUnique({ where: { symbol: signal.symbol } });
             if (!instrument) {
                 throw new Error(`Instrument not found: ${signal.symbol}`);
             }
@@ -47,22 +47,22 @@ export class OrderManagerService {
             const orderId = await this.kite.placeOrder('regular', orderParams);
 
             // Save order to database
-            const order = await db.create('Order', {
-                id: `order_${Date.now()}`,
-                sessionId: this.sessionId,
-                instrumentId: instrument.id,
-                orderId: orderId,
-                symbol: signal.symbol,
-                action: signal.action,
-                quantity: signal.quantity,
-                price: signal.price || 0,
-                orderType: orderParams.order_type,
-                status: 'PENDING',
-                orderTime: new Date(),
-                executionTime: null,
-                executionPrice: null,
-                stopLoss: signal.stopLoss,
-                target: signal.target
+            const order = await db.trade.create({
+                data: {
+                    id: `order_${Date.now()}`,
+                    sessionId: this.sessionId,
+                    instrumentId: instrument.id,
+                    orderId: orderId,
+                    action: signal.action,
+                    quantity: signal.quantity,
+                    price: signal.price || 0,
+                    orderType: orderParams.order_type,
+                    status: 'PENDING',
+                    orderTime: new Date(),
+                    executionTime: null,
+                    stopLoss: signal.stopLoss ?? null,
+                    target: signal.target ?? null
+                }
             });
 
             logger.info('Order placed successfully:', orderId);
@@ -81,9 +81,11 @@ export class OrderManagerService {
             const modifiedOrderId = await this.kite.modifyOrder('regular', orderId, updates);
 
             // Update order in database
-            await db.update('Order', { orderId }, {
-                ...updates,
-                updatedAt: new Date()
+            await db.trade.update({
+                where: { id: orderId },
+                data: {
+                    ...updates
+                }
             });
 
             logger.info('Order modified successfully:', orderId);
@@ -102,9 +104,11 @@ export class OrderManagerService {
             const cancelledOrderId = await this.kite.cancelOrder('regular', orderId);
 
             // Update order status in database
-            await db.update('Order', { orderId }, {
-                status: 'CANCELLED',
-                updatedAt: new Date()
+            await db.trade.update({
+                where: { id: orderId },
+                data: {
+                    status: 'CANCELLED'
+                }
             });
 
             logger.info('Order cancelled successfully:', orderId);
@@ -124,14 +128,15 @@ export class OrderManagerService {
 
             // Update database with latest order status
             for (const order of orders) {
-                const existingOrder = await db.findUnique('Order', { orderId: order.order_id });
+                const existingOrder = await db.trade.findFirst({ where: { orderId: order.order_id } });
 
                 if (existingOrder) {
-                    await db.update('Order', { orderId: order.order_id }, {
-                        status: order.status,
-                        executionPrice: order.average_price || null,
-                        executionTime: order.order_timestamp ? new Date(order.order_timestamp) : null,
-                        updatedAt: new Date()
+                    await db.trade.update({
+                        where: { id: existingOrder.id },
+                        data: {
+                            status: order.status,
+                            executionTime: order.order_timestamp ? new Date(order.order_timestamp) : null
+                        }
                     });
                 }
             }
@@ -153,12 +158,14 @@ export class OrderManagerService {
 
             // Update database with latest order info
             const latestOrder = orderHistory[orderHistory.length - 1];
-            if (latestOrder) {
-                await db.update('Order', { orderId }, {
-                    status: latestOrder.status,
-                    executionPrice: latestOrder.average_price || null,
-                    executionTime: latestOrder.order_timestamp ? new Date(latestOrder.order_timestamp) : null,
-                    updatedAt: new Date()
+            const existingTrade = await db.trade.findFirst({ where: { orderId } });
+            if (existingTrade && latestOrder) {
+                await db.trade.update({
+                    where: { id: existingTrade.id },
+                    data: {
+                        status: latestOrder.status,
+                        executionTime: latestOrder.order_timestamp ? new Date(latestOrder.order_timestamp) : null
+                    }
                 });
             }
 
@@ -179,11 +186,11 @@ export class OrderManagerService {
             // Sync positions with database
             for (const position of positions.net) {
                 if (position.quantity !== 0) {
-                    const instrument = await db.findUnique('Instrument', { symbol: position.tradingsymbol });
+                    const instrument = await db.instrument.findUnique({ where: { symbol: position.tradingsymbol } });
 
                     if (instrument) {
                         // Check if position exists in database
-                        const existingPositions = await db.findMany('Position', {
+                        const existingPositions = await db.position.findMany({
                             where: {
                                 sessionId: this.sessionId,
                                 instrumentId: instrument.id,
@@ -193,30 +200,35 @@ export class OrderManagerService {
 
                         if (existingPositions.length === 0) {
                             // Create new position
-                            await db.create('Position', {
-                                id: `position_${Date.now()}`,
-                                sessionId: this.sessionId,
-                                instrumentId: instrument.id,
-                                symbol: position.tradingsymbol,
-                                quantity: position.quantity,
-                                averagePrice: position.average_price,
-                                currentPrice: position.last_price,
-                                side: position.quantity > 0 ? 'LONG' : 'SHORT',
-                                unrealizedPnL: position.unrealised,
-                                realizedPnL: position.realised,
-                                openTime: new Date(),
-                                closeTime: null
+                            await db.position.create({
+                                data: {
+                                    id: `position_${Date.now()}`,
+                                    sessionId: this.sessionId,
+                                    instrumentId: instrument.id,
+                                    quantity: position.quantity,
+                                    averagePrice: position.average_price,
+                                    currentPrice: position.last_price,
+                                    side: position.quantity > 0 ? 'LONG' : 'SHORT',
+                                    unrealizedPnL: position.unrealised,
+                                    realizedPnL: position.realised,
+                                    openTime: new Date(),
+                                    closeTime: null
+                                }
                             });
                         } else {
                             // Update existing position
-                            await db.update('Position', { id: existingPositions[0].id }, {
-                                quantity: position.quantity,
-                                averagePrice: position.average_price,
-                                currentPrice: position.last_price,
-                                unrealizedPnL: position.unrealised,
-                                realizedPnL: position.realised,
-                                updatedAt: new Date()
-                            });
+                            if (existingPositions[0]) {
+                                await db.position.update({
+                                    where: { id: existingPositions[0].id },
+                                    data: {
+                                        quantity: position.quantity,
+                                        averagePrice: position.average_price,
+                                        currentPrice: position.last_price,
+                                        unrealizedPnL: position.unrealised,
+                                        realizedPnL: position.realised
+                                    }
+                                });
+                            }
                         }
                     }
                 }
@@ -249,7 +261,7 @@ export class OrderManagerService {
      */
     async getOrderBook() {
         try {
-            const orders = await db.findMany('Order', {
+            const orders = await db.trade.findMany({
                 where: { sessionId: this.sessionId },
                 orderBy: { orderTime: 'desc' }
             });
@@ -265,7 +277,7 @@ export class OrderManagerService {
      */
     async getPendingOrders() {
         try {
-            const orders = await db.findMany('Order', {
+            const orders = await db.trade.findMany({
                 where: {
                     sessionId: this.sessionId,
                     status: 'PENDING'
@@ -284,14 +296,14 @@ export class OrderManagerService {
      */
     async getOrderMetrics() {
         try {
-            const orders = await db.findMany('Order', {
+            const orders = await db.trade.findMany({
                 where: { sessionId: this.sessionId }
             });
 
             const totalOrders = orders.length;
-            const completedOrders = orders.filter(o => o.status === 'COMPLETE').length;
-            const cancelledOrders = orders.filter(o => o.status === 'CANCELLED').length;
-            const pendingOrders = orders.filter(o => o.status === 'PENDING').length;
+            const completedOrders = orders.filter((o: any) => o.status === 'COMPLETE').length;
+            const cancelledOrders = orders.filter((o: any) => o.status === 'CANCELLED').length;
+            const pendingOrders = orders.filter((o: any) => o.status === 'PENDING').length;
 
             const successRate = totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
 

@@ -1,8 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { 
-  securityValidator, 
-  SecurityValidator, 
-  ValidationResult, 
+import {
+  securityValidator,
+  SecurityValidator,
+  ValidationResult,
   SecurityLevel,
   ValidationType,
   validateTradingInput,
@@ -44,7 +44,7 @@ export const securityMiddleware = (config: SecurityMiddlewareConfig = {}) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
     const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     // Add request context
     (req as any).context = {
       requestId,
@@ -82,7 +82,7 @@ export const securityMiddleware = (config: SecurityMiddlewareConfig = {}) => {
           getClientIdentifier(req),
           { requestId, path: req.path, method: req.method }
         );
-        
+
         if (!rateLimitValidation.isValid) {
           return res.status(429).json({
             error: 'Rate limit exceeded',
@@ -99,7 +99,7 @@ export const securityMiddleware = (config: SecurityMiddlewareConfig = {}) => {
             authHeader.replace('Bearer ', ''),
             { requestId, path: req.path, method: req.method }
           );
-          
+
           if (!authValidation.isValid) {
             return res.status(401).json({
               error: 'Authentication failed',
@@ -119,7 +119,7 @@ export const securityMiddleware = (config: SecurityMiddlewareConfig = {}) => {
             req.method,
             { requestId, path: req.path, method: req.method }
           );
-          
+
           if (!authzValidation.isValid) {
             return res.status(403).json({
               error: 'Authorization failed',
@@ -153,6 +153,7 @@ export const securityMiddleware = (config: SecurityMiddlewareConfig = {}) => {
       }
 
       next();
+      return;
 
     } catch (error) {
       logger.error('Security middleware error', {
@@ -219,6 +220,7 @@ export const inputValidationMiddleware = (validationRules: Record<string, string
       }
 
       next();
+      return;
 
     } catch (error) {
       logger.error('Input validation middleware error', {
@@ -246,7 +248,7 @@ export const authenticationMiddleware = (options: {
 
     try {
       const authHeader = req.headers.authorization;
-      
+
       if (!authHeader && requireAuth) {
         return res.status(401).json({
           error: 'Authentication required',
@@ -282,6 +284,7 @@ export const authenticationMiddleware = (options: {
       }
 
       next();
+      return;
 
     } catch (error) {
       logger.error('Authentication middleware error', {
@@ -328,6 +331,7 @@ export const rateLimitMiddleware = (options: {
       }
 
       next();
+      return;
 
     } catch (error) {
       logger.error('Rate limit middleware error', {
@@ -356,9 +360,9 @@ export const auditLogMiddleware = (req: Request, res: Response, next: NextFuncti
 
   // Override res.end to capture response
   const originalEnd = res.end;
-  res.end = function(chunk?: any, encoding?: any, cb?: () => void) {
+  res.end = function (chunk?: any, encoding?: any, cb?: () => void) {
     const duration = Date.now() - startTime;
-    
+
     // Log request details
     logger.info('Request completed', {
       requestId,
@@ -375,6 +379,7 @@ export const auditLogMiddleware = (req: Request, res: Response, next: NextFuncti
   };
 
   next();
+  return;
 };
 
 // Trading-specific validation middleware
@@ -429,6 +434,7 @@ export const tradingValidationMiddleware = (req: Request, res: Response, next: N
     }
 
     next();
+    return;
 
   } catch (error) {
     logger.error('Trading validation middleware error', {
@@ -486,6 +492,7 @@ export const userRegistrationMiddleware = (req: Request, res: Response, next: Ne
     }
 
     next();
+    return;
 
   } catch (error) {
     logger.error('User registration middleware error', {
@@ -539,6 +546,7 @@ export const securityMonitoringMiddleware = (req: Request, res: Response, next: 
   }
 
   next();
+  return;
 };
 
 // Utility functions
@@ -554,7 +562,7 @@ function setSecurityHeaders(res: Response): void {
 
 function validateCORS(req: Request, allowedOrigins: string[]): ValidationResult {
   const origin = req.headers.origin;
-  
+
   if (!origin) {
     return {
       isValid: true,
@@ -589,7 +597,7 @@ function validateCORS(req: Request, allowedOrigins: string[]): ValidationResult 
 
 function validateRequestSize(req: Request, maxSize: number): ValidationResult {
   const contentLength = parseInt(req.headers['content-length'] || '0');
-  
+
   if (contentLength > maxSize) {
     return {
       isValid: false,

@@ -1,7 +1,7 @@
 import { AutomatedTradingService, TradingConfig } from '../services/automated-trading.service';
 import { logger } from '../logger/logger';
 import { MovingAverageStrategy } from '../services/strategies/moving-average-strategy';
-import { RSIStrategy } from '../services/strategies/rsi-strategy';
+import { RsiStrategy } from '../services/strategies/rsi-strategy';
 import { BreakoutStrategy } from '../services/strategies/breakout-strategy';
 
 async function runAutomatedTradingExample(): Promise<void> {
@@ -37,13 +37,11 @@ async function runAutomatedTradingExample(): Promise<void> {
                 end: '15:30'                    // Market close time
             },
             riskManagement: {
-                enabled: true,
-                stopLossPercentage: 2,          // 2% stop loss
-                takeProfitPercentage: 4,        // 4% take profit (1:2 risk-reward)
-                maxPositionsPerSymbol: 1,
-                maxRiskPerSymbol: 5,
-                trailingStopLoss: true,
-                trailingStopLossPercentage: 1
+                stopLoss: { type: 'PERCENTAGE' as const, value: 2 },
+                takeProfit: { type: 'PERCENTAGE' as const, value: 4 },
+                maxDrawdown: 10,
+                maxDailyLoss: 1000,
+                maxOpenPositions: 3
             }
         };
 
@@ -69,7 +67,7 @@ async function runAutomatedTradingExample(): Promise<void> {
 
     } catch (error) {
         logger.error('Automated trading example failed:', error);
-        console.error('❌ Error:', error);
+        console.error('❌ Error:', error instanceof Error ? error.message : String(error));
     }
 }
 
@@ -148,26 +146,34 @@ async function addTradingStrategies(tradingService: AutomatedTradingService): Pr
     const maStrategy = {
         name: 'MA_Crossover_Strategy',
         description: 'EMA crossover strategy for trend following',
-        type: 'TREND_FOLLOWING',
+        type: 'TREND_FOLLOWING' as const,
         enabled: true,
-        symbols: ['RELIANCE', 'TCS', 'HDFCBANK'],
-        timeframe: '5m',
         parameters: {
             shortPeriod: 10,
             longPeriod: 20,
             volumeThreshold: 100000
         },
+        capitalAllocation: 10000,
+        instruments: ['RELIANCE', 'TCS', 'HDFCBANK'],
+        version: '1.0',
+        category: 'TECHNICAL_ANALYSIS' as const,
+        riskLevel: 'MEDIUM' as const,
+        timeframes: ['5m'],
         entryRules: [],
         exitRules: [],
-        riskManagement: {
-            enabled: true,
-            stopLossPercentage: 1.5,
-            takeProfitPercentage: 3
-        },
         positionSizing: {
-            method: 'RISK_PER_TRADE',
+            method: 'RISK_PER_TRADE' as const,
             riskPerTrade: 1.5
-        }
+        },
+        riskManagement: {
+            stopLoss: { type: 'PERCENTAGE' as const, value: 1.5 },
+            takeProfit: { type: 'PERCENTAGE' as const, value: 3 },
+            maxDrawdown: 10,
+            maxDailyLoss: 1000,
+            maxOpenPositions: 3
+        },
+        filters: [],
+        notifications: []
     };
 
     await tradingService.addStrategy(maStrategy);
@@ -177,27 +183,35 @@ async function addTradingStrategies(tradingService: AutomatedTradingService): Pr
     const rsiStrategy = {
         name: 'RSI_Mean_Reversion',
         description: 'RSI-based mean reversion strategy',
-        type: 'MEAN_REVERSION',
+        type: 'MEAN_REVERSION' as const,
         enabled: true,
-        symbols: ['INFY', 'HINDUNILVR', 'ITC'],
-        timeframe: '15m',
         parameters: {
             period: 14,
             oversoldThreshold: 30,
             overboughtThreshold: 70,
             volumeThreshold: 50000
         },
+        capitalAllocation: 10000,
+        instruments: ['INFY', 'HINDUNILVR', 'ITC'],
+        version: '1.0',
+        category: 'TECHNICAL_ANALYSIS' as const,
+        riskLevel: 'MEDIUM' as const,
+        timeframes: ['15m'],
         entryRules: [],
         exitRules: [],
-        riskManagement: {
-            enabled: true,
-            stopLossPercentage: 2,
-            takeProfitPercentage: 3
-        },
         positionSizing: {
-            method: 'PERCENTAGE_OF_CAPITAL',
+            method: 'PERCENTAGE_OF_CAPITAL' as const,
             percentageOfCapital: 5
-        }
+        },
+        riskManagement: {
+            stopLoss: { type: 'PERCENTAGE' as const, value: 2 },
+            takeProfit: { type: 'PERCENTAGE' as const, value: 3 },
+            maxDrawdown: 10,
+            maxDailyLoss: 1000,
+            maxOpenPositions: 3
+        },
+        filters: [],
+        notifications: []
     };
 
     await tradingService.addStrategy(rsiStrategy);
@@ -207,27 +221,35 @@ async function addTradingStrategies(tradingService: AutomatedTradingService): Pr
     const breakoutStrategy = {
         name: 'Breakout_Strategy',
         description: 'Support/resistance breakout strategy',
-        type: 'BREAKOUT',
+        type: 'BREAKOUT' as const,
         enabled: true,
-        symbols: ['SBIN', 'BAJFINANCE', 'MARUTI'],
-        timeframe: '30m',
         parameters: {
             lookbackPeriod: 20,
             breakoutThreshold: 0.015,
             volumeMultiplier: 1.5,
             confirmationPeriod: 2
         },
+        capitalAllocation: 10000,
+        instruments: ['SBIN', 'BAJFINANCE', 'MARUTI'],
+        version: '1.0',
+        category: 'TECHNICAL_ANALYSIS' as const,
+        riskLevel: 'MEDIUM' as const,
+        timeframes: ['30m'],
         entryRules: [],
         exitRules: [],
-        riskManagement: {
-            enabled: true,
-            stopLossPercentage: 2.5,
-            takeProfitPercentage: 5
-        },
         positionSizing: {
-            method: 'VOLATILITY_BASED',
-            volatilityPeriod: 20
-        }
+            method: 'RISK_PER_TRADE' as const,
+            riskPerTrade: 2
+        },
+        riskManagement: {
+            stopLoss: { type: 'PERCENTAGE' as const, value: 2 },
+            takeProfit: { type: 'PERCENTAGE' as const, value: 4 },
+            maxDrawdown: 10,
+            maxDailyLoss: 1000,
+            maxOpenPositions: 3
+        },
+        filters: [],
+        notifications: []
     };
 
     await tradingService.addStrategy(breakoutStrategy);
