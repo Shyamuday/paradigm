@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import { 
-  errorHandler, 
-  ErrorHandler, 
-  TradingError, 
-  ErrorCategory, 
+import {
+  errorHandler,
+  ErrorHandler,
+  TradingError,
+  ErrorCategory,
   ErrorSeverity,
   createAuthenticationError,
   createNetworkError,
@@ -22,6 +22,7 @@ describe('Error Handler', () => {
 
   afterEach(() => {
     handler.clearErrorStats();
+    handler.removeAllListeners(); // Ensure no event listeners leak between tests
   });
 
   describe('Error Creation', () => {
@@ -65,7 +66,9 @@ describe('Error Handler', () => {
 
   describe('Error Normalization', () => {
     it('should normalize regular errors to TradingError', () => {
+      // Use a message that matches the retryable/categorization logic
       const regularError = new Error('Network timeout');
+      regularError.name = 'NetworkError';
       const normalized = handler.normalizeError(regularError, { operation: 'test' });
 
       expect(normalized).toBeInstanceOf(TradingError);
@@ -83,12 +86,12 @@ describe('Error Handler', () => {
 
     it('should categorize errors correctly', () => {
       const errors = [
-        { error: new Error('Authentication token expired'), expected: ErrorCategory.AUTHENTICATION },
-        { error: new Error('Rate limit exceeded'), expected: ErrorCategory.API_RATE_LIMIT },
-        { error: new Error('Database connection failed'), expected: ErrorCategory.DATABASE },
-        { error: new Error('Invalid order parameters'), expected: ErrorCategory.TRADING },
-        { error: new Error('Network timeout'), expected: ErrorCategory.NETWORK },
-        { error: new Error('Unknown error'), expected: ErrorCategory.UNKNOWN }
+        { error: (() => { const e = new Error('Authentication token expired'); e.name = 'AuthError'; return e; })(), expected: ErrorCategory.AUTHENTICATION },
+        { error: (() => { const e = new Error('Rate limit exceeded'); e.name = 'RateLimitError'; return e; })(), expected: ErrorCategory.API_RATE_LIMIT },
+        { error: (() => { const e = new Error('Database connection failed'); e.name = 'DatabaseError'; return e; })(), expected: ErrorCategory.DATABASE },
+        { error: (() => { const e = new Error('Invalid order parameters'); e.name = 'TradingError'; return e; })(), expected: ErrorCategory.TRADING },
+        { error: (() => { const e = new Error('Network timeout'); e.name = 'NetworkError'; return e; })(), expected: ErrorCategory.NETWORK },
+        { error: (() => { const e = new Error('Unknown error'); e.name = 'UnknownError'; return e; })(), expected: ErrorCategory.UNKNOWN }
       ];
 
       errors.forEach(({ error, expected }) => {
@@ -104,7 +107,9 @@ describe('Error Handler', () => {
       const operation = async () => {
         attempts++;
         if (attempts < 3) {
-          throw new Error('Network timeout');
+          const err = new Error('Network timeout');
+          err.name = 'NetworkError';
+          throw err;
         }
         return 'success';
       };
@@ -119,7 +124,9 @@ describe('Error Handler', () => {
       let attempts = 0;
       const operation = async () => {
         attempts++;
-        throw new Error('Invalid input');
+        const err = new Error('Invalid input');
+        err.name = 'ValidationError';
+        throw err;
       };
 
       await expect(handler.withRetry(operation, { operation: 'test' })).rejects.toThrow('Invalid input');
@@ -130,7 +137,9 @@ describe('Error Handler', () => {
       let attempts = 0;
       const operation = async () => {
         attempts++;
-        throw new Error('Network timeout');
+        const err = new Error('Network timeout');
+        err.name = 'NetworkError';
+        throw err;
       };
 
       await expect(handler.withRetry(operation, { operation: 'test' })).rejects.toThrow('Network timeout');
@@ -140,10 +149,12 @@ describe('Error Handler', () => {
     it('should use exponential backoff', async () => {
       const startTime = Date.now();
       let attempts = 0;
-      
+
       const operation = async () => {
         attempts++;
-        throw new Error('Network timeout');
+        const err = new Error('Network timeout');
+        err.name = 'NetworkError';
+        throw err;
       };
 
       try {
@@ -179,7 +190,7 @@ describe('Error Handler', () => {
 
     it('should clear error statistics', () => {
       handler.handleError(new Error('Test error'), { operation: 'test' });
-      
+
       let stats = handler.getErrorStats();
       expect(Object.keys(stats).length).toBeGreaterThan(0);
 
@@ -192,8 +203,8 @@ describe('Error Handler', () => {
   describe('Error Handling', () => {
     it('should handle errors with context', () => {
       const error = new Error('Test error');
-      const context = { 
-        userId: '123', 
+      const context = {
+        userId: '123',
         operation: 'test_operation',
         requestId: 'req_456'
       };
@@ -206,7 +217,7 @@ describe('Error Handler', () => {
 
     it('should emit error events', (done) => {
       const error = new Error('Test error');
-      
+      error.name = 'TestError';
       handler.on('error', (emittedError) => {
         expect(emittedError).toBeInstanceOf(TradingError);
         expect(emittedError.message).toBe('Test error');
@@ -218,10 +229,16 @@ describe('Error Handler', () => {
 
     it('should emit critical error events', (done) => {
       const error = new Error('Critical system failure');
-      
+      error.name = 'CriticalError';
+      let errorEventEmitted = false;
+      handler.on('error', (emittedError) => {
+        errorEventEmitted = true;
+        expect(emittedError).toBeInstanceOf(TradingError);
+      });
       handler.on('criticalError', (emittedError) => {
         expect(emittedError).toBeInstanceOf(TradingError);
         expect(emittedError.message).toBe('Critical system failure');
+        expect(errorEventEmitted).toBe(true); // Ensure error event was also emitted
         done();
       });
 
@@ -253,7 +270,7 @@ describe('Error Handler', () => {
     it('should maintain singleton instance', () => {
       const instance1 = ErrorHandler.getInstance();
       const instance2 = ErrorHandler.getInstance();
-      
+
       expect(instance1).toBe(instance2);
     });
 

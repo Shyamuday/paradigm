@@ -2,7 +2,6 @@ import { KiteConnect } from 'kiteconnect';
 import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
-const open = require('open');
 import { logger } from '../logger/logger';
 import {
     SessionDataSchema,
@@ -138,7 +137,7 @@ export class ZerodhaAuth {
             });
 
             // Start server and open browser
-            const server = app.listen(PORT, () => {
+            const server = app.listen(PORT, async () => {
                 console.log(`
 🔐 Zerodha OAuth Login
 ----------------------
@@ -146,7 +145,18 @@ export class ZerodhaAuth {
 2. Opening Kite login page in your browser
 3. After login, you'll be redirected back here
                 `);
-                open(`http://localhost:${PORT}`);
+
+                // Open browser (only in non-test environment)
+                if (process.env.NODE_ENV !== 'test') {
+                    try {
+                        const { default: open } = await import('open');
+                        await open(`http://localhost:${PORT}`);
+                    } catch (error) {
+                        console.log('Could not open browser automatically. Please open http://localhost:3000 manually.');
+                    }
+                } else {
+                    console.log('Test environment detected. Please open http://localhost:3000 manually if needed.');
+                }
             });
 
             // Cleanup

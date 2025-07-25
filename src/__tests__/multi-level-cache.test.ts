@@ -13,7 +13,8 @@ const mockRedis = {
   flushdb: jest.fn(),
   on: jest.fn(),
   connect: jest.fn(),
-  disconnect: jest.fn()
+  disconnect: jest.fn(),
+  removeAllListeners: jest.fn()
 };
 
 // Mock Prisma client
@@ -48,7 +49,7 @@ describe('MultiLevelCacheService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     config = {
       l1: {
         level: 'L1',
@@ -99,20 +100,28 @@ describe('MultiLevelCacheService', () => {
 
     it('should setup L2 cache when Redis is available', async () => {
       mockRedis.connect.mockResolvedValue(undefined);
-      
+
       const serviceWithRedis = new MultiLevelCacheService(config);
+
+      // Wait a bit for async initialization to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       const stats = serviceWithRedis.getStats();
-      
+
       expect(stats.has('L2')).toBe(true);
       await serviceWithRedis.dispose();
     });
 
     it('should handle Redis connection errors gracefully', async () => {
       mockRedis.connect.mockRejectedValue(new Error('Connection failed'));
-      
+
       const serviceWithRedisError = new MultiLevelCacheService(config);
+
+      // Wait a bit for async initialization to complete
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       const stats = serviceWithRedisError.getStats();
-      
+
       // Should still have L1 cache even if Redis fails
       expect(stats.has('L1')).toBe(true);
       await serviceWithRedisError.dispose();
@@ -122,22 +131,22 @@ describe('MultiLevelCacheService', () => {
   describe('L1 Cache Operations', () => {
     it('should set and get values from L1 cache', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       const result = await cacheService.get('test:key');
-      
+
       expect(result).toEqual(testData);
     });
 
     it('should handle expired values in L1 cache', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       // Set with very short TTL
       await cacheService.set('test:key', testData, ['test'], 0.001);
-      
+
       // Wait for expiration
       await new Promise(resolve => setTimeout(resolve, 10));
-      
+
       const result = await cacheService.get('test:key');
       expect(result).toBeNull();
     });
@@ -147,35 +156,35 @@ describe('MultiLevelCacheService', () => {
       for (let i = 0; i < 110; i++) {
         await cacheService.set(`key:${i}`, { value: i }, ['test'], 300);
       }
-      
+
       const stats = cacheService.getStats();
       const l1Stats = stats.get('L1');
-      
+
       expect(l1Stats?.evictions).toBeGreaterThan(0);
     });
 
     it('should update access statistics', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
-      
+
       // Access multiple times
       await cacheService.get('test:key');
       await cacheService.get('test:key');
       await cacheService.get('test:key');
-      
+
       const stats = cacheService.getStats();
       const l1Stats = stats.get('L1');
-      
+
       expect(l1Stats?.hits).toBe(3);
     });
 
     it('should delete values from L1 cache', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       await cacheService.delete('test:key');
-      
+
       const result = await cacheService.get('test:key');
       expect(result).toBeNull();
     });
@@ -184,13 +193,13 @@ describe('MultiLevelCacheService', () => {
       await cacheService.set('key1', { value: 1 }, ['tag1', 'tag2']);
       await cacheService.set('key2', { value: 2 }, ['tag2', 'tag3']);
       await cacheService.set('key3', { value: 3 }, ['tag1', 'tag3']);
-      
+
       await cacheService.invalidateByTags(['tag1']);
-      
+
       const result1 = await cacheService.get('key1');
       const result2 = await cacheService.get('key2');
       const result3 = await cacheService.get('key3');
-      
+
       expect(result1).toBeNull();
       expect(result2).not.toBeNull(); // Should still exist
       expect(result3).toBeNull();
@@ -205,34 +214,34 @@ describe('MultiLevelCacheService', () => {
     it('should set and get values from L2 cache', async () => {
       const testData = { name: 'test', value: 123 };
       const serializedData = JSON.stringify({ value: testData, tags: ['test'], timestamp: Date.now() });
-      
+
       mockRedis.get.mockResolvedValue(serializedData);
       mockRedis.setex.mockResolvedValue('OK');
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       const result = await cacheService.get('test:key');
-      
+
       expect(mockRedis.setex).toHaveBeenCalled();
       expect(result).toEqual(testData);
     });
 
     it('should handle Redis cache misses', async () => {
       mockRedis.get.mockResolvedValue(null);
-      
+
       const result = await cacheService.get('test:key');
       expect(result).toBeNull();
     });
 
     it('should handle Redis errors gracefully', async () => {
       mockRedis.get.mockRejectedValue(new Error('Redis error'));
-      
+
       const result = await cacheService.get('test:key');
       expect(result).toBeNull();
     });
 
     it('should delete values from L2 cache', async () => {
       mockRedis.del.mockResolvedValue(1);
-      
+
       await cacheService.delete('test:key');
       expect(mockRedis.del).toHaveBeenCalledWith('test:key');
     });
@@ -240,9 +249,9 @@ describe('MultiLevelCacheService', () => {
     it('should invalidate by tags in L2 cache', async () => {
       mockRedis.smembers.mockResolvedValue(['key1', 'key2']);
       mockRedis.del.mockResolvedValue(2);
-      
+
       await cacheService.invalidateByTags(['tag1']);
-      
+
       expect(mockRedis.smembers).toHaveBeenCalledWith('tag:tag1');
       expect(mockRedis.del).toHaveBeenCalledWith('key1', 'key2');
     });
@@ -253,49 +262,49 @@ describe('MultiLevelCacheService', () => {
       const testData = { name: 'test', value: 123 };
       const serializedData = JSON.stringify({ value: testData, tags: ['test'], timestamp: Date.now() });
       const futureDate = new Date(Date.now() + 3600000);
-      
+
       mockPrisma.cache.findUnique.mockResolvedValue({
         key: 'test:key',
         value: serializedData,
         expiresAt: futureDate
       });
-      
+
       mockPrisma.cache.upsert.mockResolvedValue({});
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       const result = await cacheService.get('test:key');
-      
+
       expect(mockPrisma.cache.upsert).toHaveBeenCalled();
       expect(result).toEqual(testData);
     });
 
     it('should handle expired values in L3 cache', async () => {
       const pastDate = new Date(Date.now() - 1000);
-      
+
       mockPrisma.cache.findUnique.mockResolvedValue({
         key: 'test:key',
         value: '{}',
         expiresAt: pastDate
       });
-      
+
       mockPrisma.cache.delete.mockResolvedValue({});
-      
+
       const result = await cacheService.get('test:key');
-      
+
       expect(result).toBeNull();
       expect(mockPrisma.cache.delete).toHaveBeenCalled();
     });
 
     it('should handle database cache misses', async () => {
       mockPrisma.cache.findUnique.mockResolvedValue(null);
-      
+
       const result = await cacheService.get('test:key');
       expect(result).toBeNull();
     });
 
     it('should delete values from L3 cache', async () => {
       mockPrisma.cache.delete.mockResolvedValue({});
-      
+
       await cacheService.delete('test:key');
       expect(mockPrisma.cache.delete).toHaveBeenCalledWith({
         where: { key: 'test:key' }
@@ -304,9 +313,9 @@ describe('MultiLevelCacheService', () => {
 
     it('should invalidate by tags in L3 cache', async () => {
       mockPrisma.cache.deleteMany.mockResolvedValue({ count: 2 });
-      
+
       await cacheService.invalidateByTags(['tag1']);
-      
+
       expect(mockPrisma.cache.deleteMany).toHaveBeenCalledWith({
         where: {
           tags: {
@@ -320,22 +329,22 @@ describe('MultiLevelCacheService', () => {
   describe('Multi-Level Cache Operations', () => {
     it('should cascade from L1 to L2 to L3', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       // Mock L3 cache to return data
       const serializedData = JSON.stringify({ value: testData, tags: ['test'], timestamp: Date.now() });
       const futureDate = new Date(Date.now() + 3600000);
-      
+
       mockPrisma.cache.findUnique.mockResolvedValue({
         key: 'test:key',
         value: serializedData,
         expiresAt: futureDate
       });
-      
+
       mockRedis.get.mockResolvedValue(null); // L2 miss
       mockRedis.setex.mockResolvedValue('OK');
-      
+
       const result = await cacheService.get('test:key');
-      
+
       expect(result).toEqual(testData);
       expect(mockRedis.setex).toHaveBeenCalled(); // Should populate L2
     });
@@ -343,9 +352,9 @@ describe('MultiLevelCacheService', () => {
     it('should clear all cache levels', async () => {
       mockRedis.flushdb.mockResolvedValue('OK');
       mockPrisma.cache.deleteMany.mockResolvedValue({ count: 0 });
-      
+
       await cacheService.clear();
-      
+
       expect(mockRedis.flushdb).toHaveBeenCalled();
       expect(mockPrisma.cache.deleteMany).toHaveBeenCalled();
     });
@@ -354,28 +363,28 @@ describe('MultiLevelCacheService', () => {
   describe('Trading-Specific Methods', () => {
     it('should handle market data caching', async () => {
       const marketData = { symbol: 'RELIANCE', price: 2500 };
-      
+
       await cacheService.setMarketData('RELIANCE', '1m', marketData, 60);
       const result = await cacheService.getMarketData('RELIANCE', '1m');
-      
+
       expect(result).toEqual(marketData);
     });
 
     it('should handle portfolio caching', async () => {
       const portfolioData = { userId: 'user123', totalValue: 100000 };
-      
+
       await cacheService.setPortfolio('user123', portfolioData);
       const result = await cacheService.getPortfolio('user123');
-      
+
       expect(result).toEqual(portfolioData);
     });
 
     it('should handle orders caching', async () => {
       const ordersData = [{ id: 'order1', symbol: 'RELIANCE' }];
-      
+
       await cacheService.setOrders('user123', 'PENDING', ordersData);
       const result = await cacheService.getOrders('user123', 'PENDING');
-      
+
       expect(result).toEqual(ordersData);
     });
 
@@ -395,15 +404,15 @@ describe('MultiLevelCacheService', () => {
   describe('Statistics and Metrics', () => {
     it('should track cache statistics', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       await cacheService.get('test:key');
       await cacheService.get('test:key');
       await cacheService.get('nonexistent:key');
-      
+
       const stats = cacheService.getStats();
       const l1Stats = stats.get('L1');
-      
+
       expect(l1Stats?.hits).toBe(2);
       expect(l1Stats?.misses).toBe(1);
       expect(l1Stats?.hitRate).toBeGreaterThan(0);
@@ -411,12 +420,12 @@ describe('MultiLevelCacheService', () => {
 
     it('should track cache operations', async () => {
       const testData = { name: 'test', value: 123 };
-      
+
       await cacheService.set('test:key', testData, ['test'], 300);
       await cacheService.get('test:key');
-      
+
       const operations = cacheService.getOperations(10);
-      
+
       expect(operations.length).toBeGreaterThan(0);
       expect(operations[0]).toHaveProperty('operation');
       expect(operations[0]).toHaveProperty('key');
@@ -427,25 +436,31 @@ describe('MultiLevelCacheService', () => {
   describe('Event Emission', () => {
     it('should emit cache hit events', (done) => {
       const testData = { name: 'test', value: 123 };
-      
-      cacheService.on('cacheHit', (level: string, key: string) => {
+
+      const hitHandler = (level: string, key: string) => {
         expect(level).toBe('L1');
         expect(key).toBe('test:key');
+        cacheService.off('cacheHit', hitHandler);
         done();
-      });
-      
+      };
+
+      cacheService.on('cacheHit', hitHandler);
+
       cacheService.set('test:key', testData, ['test'], 300).then(() => {
         return cacheService.get('test:key');
       });
     });
 
     it('should emit cache miss events', (done) => {
-      cacheService.on('cacheMiss', (level: string, key: string) => {
+      const missHandler = (level: string, key: string) => {
         expect(level).toBe('ALL');
         expect(key).toBe('nonexistent:key');
+        cacheService.off('cacheMiss', missHandler);
         done();
-      });
-      
+      };
+
+      cacheService.on('cacheMiss', missHandler);
+
       cacheService.get('nonexistent:key');
     });
   });
@@ -460,7 +475,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    
+
     mockCacheService = {
       get: jest.fn(),
       set: jest.fn(),
@@ -613,7 +628,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
       const routes = middleware.getRoutes();
       const getStatsHandler = routes['GET /api/cache/stats'];
-      
+
       await getStatsHandler(mockRequest, mockResponse);
 
       expect(mockResponse.json).toHaveBeenCalledWith({
@@ -632,7 +647,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
       const routes = middleware.getRoutes();
       const getOperationsHandler = routes['GET /api/cache/operations'];
-      
+
       await getOperationsHandler(mockRequest, mockResponse);
 
       expect(mockResponse.json).toHaveBeenCalledWith({
@@ -648,7 +663,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
       const routes = middleware.getRoutes();
       const clearCacheHandler = routes['POST /api/cache/clear'];
-      
+
       await clearCacheHandler(mockRequest, mockResponse);
 
       expect(mockCacheService.clear).toHaveBeenCalled();
@@ -665,7 +680,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
       const routes = middleware.getRoutes();
       const invalidateHandler = routes['POST /api/cache/invalidate'];
-      
+
       await invalidateHandler(mockRequest, mockResponse);
 
       expect(mockCacheService.invalidateByTags).toHaveBeenCalledWith(['tag1', 'tag2']);
@@ -681,7 +696,7 @@ describe('MultiLevelCacheMiddleware', () => {
 
       const routes = middleware.getRoutes();
       const invalidateHandler = routes['POST /api/cache/invalidate'];
-      
+
       await invalidateHandler(mockRequest, mockResponse);
 
       expect(mockResponse.status).toHaveBeenCalledWith(400);
@@ -694,11 +709,13 @@ describe('MultiLevelCacheMiddleware', () => {
 
   describe('Error Handling', () => {
     it('should handle cache service errors gracefully', async () => {
-      mockCacheService.getStats.mockRejectedValue(new Error('Cache error'));
+      mockCacheService.getStats.mockImplementation(() => {
+        throw new Error('Cache error');
+      });
 
       const routes = middleware.getRoutes();
       const getStatsHandler = routes['GET /api/cache/stats'];
-      
+
       await getStatsHandler(mockRequest, mockResponse);
 
       expect(mockResponse.status).toHaveBeenCalledWith(500);

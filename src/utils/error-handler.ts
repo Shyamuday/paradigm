@@ -175,7 +175,7 @@ export class ErrorHandler extends EventEmitter2 {
     for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
       try {
         const result = await operation();
-        
+
         // Log successful retry if it wasn't the first attempt
         if (attempt > 1) {
           logger.info('Operation succeeded after retry', {
@@ -184,11 +184,11 @@ export class ErrorHandler extends EventEmitter2 {
             requestId: context.requestId
           });
         }
-        
+
         return result;
       } catch (error) {
-                 lastError = this.normalizeError(error as Error, context);
-        
+        lastError = this.normalizeError(error as Error, context);
+
         // Check if error is retryable
         if (!this.isRetryableError(lastError, config)) {
           throw lastError;
@@ -234,18 +234,19 @@ export class ErrorHandler extends EventEmitter2 {
    */
   public handleError(error: Error, context: ErrorContext = {}): void {
     const normalizedError = this.normalizeError(error, context);
-    
+
     // Update error counts
     this.updateErrorCount(normalizedError);
-    
+
     // Log error based on severity
     this.logError(normalizedError);
-    
+
     // Emit error event for external handlers
     this.emit('error', normalizedError);
-    
+
     // Handle critical errors
     if (normalizedError.severity === ErrorSeverity.CRITICAL) {
+      this.emit('criticalError', normalizedError); // Ensure both events are emitted
       this.handleCriticalError(normalizedError);
     }
   }
@@ -283,38 +284,48 @@ export class ErrorHandler extends EventEmitter2 {
     const name = error.name.toLowerCase();
 
     // Network errors
-    if (name.includes('network') || name.includes('timeout') || name.includes('connection')) {
+    if (name.includes('network') || name.includes('timeout') || name.includes('connection') || message.includes('network') || message.includes('timeout') || message.includes('connection') || message.includes('timed out') || message.includes('unreachable') || message.includes('refused')) {
       return ErrorCategory.NETWORK;
     }
 
     // Authentication errors
-    if (name.includes('auth') || message.includes('unauthorized') || message.includes('token')) {
+    if (name.includes('auth') || message.includes('unauthorized') || message.includes('token') || message.includes('auth') || message.includes('login') || message.includes('credential') || message.includes('forbidden')) {
       return ErrorCategory.AUTHENTICATION;
     }
 
     // Rate limit errors
-    if (message.includes('rate limit') || message.includes('too many requests')) {
+    if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
       return ErrorCategory.API_RATE_LIMIT;
     }
 
     // Database errors
-    if (name.includes('prisma') || name.includes('database') || name.includes('sql')) {
+    if (name.includes('prisma') || name.includes('database') || name.includes('sql') || message.includes('database') || message.includes('sql') || message.includes('db') || message.includes('connection failed') || message.includes('query failed') || message.includes('deadlock')) {
       return ErrorCategory.DATABASE;
     }
 
     // Validation errors
-    if (name.includes('validation') || name.includes('invalid')) {
+    if (name.includes('validation') || name.includes('invalid') || message.includes('validation') || message.includes('invalid') || message.includes('not allowed') || message.includes('required')) {
       return ErrorCategory.VALIDATION;
     }
 
     // Trading errors
-    if (message.includes('order') || message.includes('position') || message.includes('trade')) {
+    if (message.includes('order') || message.includes('position') || message.includes('trade') || message.includes('execution') || message.includes('fill')) {
       return ErrorCategory.TRADING;
     }
 
     // Market data errors
-    if (message.includes('market') || message.includes('quote') || message.includes('price')) {
+    if (message.includes('market') || message.includes('quote') || message.includes('price') || message.includes('ticker')) {
       return ErrorCategory.MARKET_DATA;
+    }
+
+    // System errors
+    if (name.includes('system') || message.includes('system') || message.includes('internal')) {
+      return ErrorCategory.SYSTEM;
+    }
+
+    // Configuration errors
+    if (name.includes('config') || message.includes('config') || message.includes('configuration')) {
+      return ErrorCategory.CONFIGURATION;
     }
 
     return ErrorCategory.UNKNOWN;
@@ -332,16 +343,16 @@ export class ErrorHandler extends EventEmitter2 {
     }
 
     // High severity errors
-    if (category === ErrorCategory.AUTHENTICATION || 
-        category === ErrorCategory.TRADING ||
-        category === ErrorCategory.DATABASE) {
+    if (category === ErrorCategory.AUTHENTICATION ||
+      category === ErrorCategory.TRADING ||
+      category === ErrorCategory.DATABASE) {
       return ErrorSeverity.HIGH;
     }
 
     // Medium severity errors
-    if (category === ErrorCategory.NETWORK || 
-        category === ErrorCategory.API_RATE_LIMIT ||
-        category === ErrorCategory.EXTERNAL_API) {
+    if (category === ErrorCategory.NETWORK ||
+      category === ErrorCategory.API_RATE_LIMIT ||
+      category === ErrorCategory.EXTERNAL_API) {
       return ErrorSeverity.MEDIUM;
     }
 
@@ -374,22 +385,32 @@ export class ErrorHandler extends EventEmitter2 {
     const name = error.name.toLowerCase();
 
     // Network errors are retryable
-    if (name.includes('network') || name.includes('timeout') || name.includes('connection')) {
+    if (name.includes('network') || name.includes('timeout') || name.includes('connection') || message.includes('network') || message.includes('timeout') || message.includes('connection') || message.includes('timed out') || message.includes('unreachable') || message.includes('refused')) {
       return true;
     }
 
     // Rate limit errors are retryable
-    if (message.includes('rate limit') || message.includes('too many requests')) {
+    if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
       return true;
     }
 
     // Authentication errors might be retryable (token refresh)
-    if (name.includes('auth') && message.includes('expired')) {
+    if ((name.includes('auth') || message.includes('auth')) && (message.includes('expired') || message.includes('token'))) {
       return true;
     }
 
     // Database connection errors are retryable
-    if (name.includes('prisma') && message.includes('connection')) {
+    if ((name.includes('prisma') || name.includes('database') || message.includes('database') || message.includes('db')) && (message.includes('connection') || message.includes('query failed') || message.includes('deadlock'))) {
+      return true;
+    }
+
+    // External API errors are retryable
+    if (message.includes('external') || message.includes('api') || message.includes('service unavailable')) {
+      return true;
+    }
+
+    // System errors that might be transient
+    if (message.includes('temporary') || message.includes('transient') || message.includes('retry')) {
       return true;
     }
 
@@ -441,7 +462,7 @@ export class ErrorHandler extends EventEmitter2 {
   private handleCriticalError(error: TradingError): void {
     // Emit critical error event
     this.emit('criticalError', error);
-    
+
     // Log to system alerts
     logger.fatal('CRITICAL ERROR - System intervention may be required', {
       error: error.message,
@@ -461,17 +482,17 @@ export class ErrorHandler extends EventEmitter2 {
    */
   public getErrorStats(): Record<string, any> {
     const stats: Record<string, any> = {};
-    
-         for (const [key, count] of this.errorCounts.entries()) {
-       const [category, code] = key.split('_');
-       if (category && code) {
-         if (!stats[category]) {
-           stats[category] = {};
-         }
-         stats[category][code] = count;
-       }
-     }
-    
+
+    for (const [key, count] of this.errorCounts.entries()) {
+      const [category, code] = key.split('_');
+      if (category && code) {
+        if (!stats[category]) {
+          stats[category] = {};
+        }
+        stats[category][code] = count;
+      }
+    }
+
     return stats;
   }
 
