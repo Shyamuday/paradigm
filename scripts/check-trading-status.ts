@@ -84,7 +84,7 @@ async function checkTradingStatus() {
 
         if (status.positions.length > 0) {
             console.log(`\n   Current Positions:`);
-            status.positions.forEach((pos, index) => {
+            status.positions.forEach((pos: any, index: number) => {
                 const pnlColor = pos.pnl >= 0 ? '🟢' : '🔴';
                 console.log(`   ${index + 1}. ${pos.symbol} (${pos.side}) - Qty: ${pos.quantity} - P&L: ${pnlColor} ₹${pos.pnl.toLocaleString()}`);
             });
@@ -99,7 +99,7 @@ async function checkTradingStatus() {
 
         if (status.activeStrategies.length > 0) {
             console.log(`\n   Active Strategies:`);
-            status.activeStrategies.forEach((strategy, index) => {
+            status.activeStrategies.forEach((strategy: any, index: number) => {
                 console.log(`   ${index + 1}. ${strategy.name} - Status: ${strategy.status}`);
             });
         }

@@ -368,6 +368,10 @@ export class MLStrategy extends BaseStrategy {
         };
     }
 
+    getInstruments(): string[] {
+        return this.config.instruments || [];
+    }
+
     // Private methods
     private extractFeatures(marketData: MarketData[]): number[] {
         const features: number[] = [];
