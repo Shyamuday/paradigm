@@ -1,6 +1,6 @@
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
-import { MarketData, TradeSignal } from './strategies/strategy.interface';
+import { MarketData, TradeSignal, StrategyConfig } from '../schemas/strategy.schema';
 import { StrategyFactory } from './strategy-factory.service';
 import { ConfigManager } from '../config/config-manager';
 
@@ -46,7 +46,42 @@ export class StrategyService {
                 };
             }
 
-            const strategy = await StrategyFactory.createStrategy(strategyName, strategyConfig.parameters);
+            // Create a complete strategy config from the simplified config
+            const completeStrategyConfig: StrategyConfig = {
+                name: strategyConfig.name,
+                enabled: strategyConfig.enabled,
+                description: strategyConfig.description || '',
+                parameters: strategyConfig.parameters,
+                capitalAllocation: strategyConfig.capitalAllocation,
+                instruments: strategyConfig.instruments,
+                type: 'TREND_FOLLOWING', // Default type
+                version: '1.0.0', // Default version
+                category: 'TECHNICAL', // Default category
+                riskLevel: 'MEDIUM', // Default risk level
+                timeframes: ['5min', '15min', '1hour'], // Default timeframes
+                entryRules: [], // Empty rules for now
+                exitRules: [], // Empty rules for now
+                positionSizing: {
+                    method: 'PERCENTAGE',
+                    value: strategyConfig.capitalAllocation * 100,
+                    maxPositionSize: 0.1,
+                    minPositionSize: 0.01
+                },
+                riskManagement: {
+                    maxRiskPerTrade: 0.02,
+                    maxDailyLoss: 5000,
+                    maxDrawdown: 0.1,
+                    stopLossType: 'PERCENTAGE',
+                    stopLossValue: 2,
+                    takeProfitType: 'PERCENTAGE',
+                    takeProfitValue: 4,
+                    trailingStop: false
+                },
+                filters: [],
+                notifications: []
+            };
+
+            const strategy = await StrategyFactory.createStrategy(strategyName, completeStrategyConfig);
             if (!strategy) {
                 return {
                     success: false,

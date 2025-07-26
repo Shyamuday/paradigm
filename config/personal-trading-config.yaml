@@ -1,0 +1,117 @@
+# Personal Trading Configuration
+# This file contains settings for personal trading with Zerodha Kite
+
+# Zerodha API Configuration
+zerodha:
+  apiKey: "${KITE_API_KEY}"
+  apiSecret: "${KITE_API_SECRET}"
+  accessToken: "${KITE_ACCESS_TOKEN}"
+
+# Trading Parameters
+trading:
+  capital: 100000 # 1 Lakh rupees
+  maxRiskPerTrade: 0.02 # 2% risk per trade
+  maxDailyLoss: 5000 # 5K daily loss limit
+  maxPositions: 5 # Maximum concurrent positions
+  tradingHours:
+    start: "09:15"
+    end: "15:30"
+
+  # Instruments to trade
+  instruments:
+    - "NIFTY"
+    - "BANKNIFTY"
+    - "RELIANCE"
+    - "TCS"
+    - "INFY"
+
+# Strategy Configuration
+strategies:
+  moving_average:
+    enabled: true
+    allocation: 0.3 # 30% of capital
+    parameters:
+      shortPeriod: 10
+      longPeriod: 20
+      volumeThreshold: 1000
+    riskManagement:
+      stopLoss: 0.02 # 2% stop loss
+      takeProfit: 0.04 # 4% take profit
+      trailingStop: false
+
+  rsi:
+    enabled: true
+    allocation: 0.2 # 20% of capital
+    parameters:
+      period: 14
+      overbought: 70
+      oversold: 30
+    riskManagement:
+      stopLoss: 0.015 # 1.5% stop loss
+      takeProfit: 0.03 # 3% take profit
+      trailingStop: false
+
+  breakout:
+    enabled: false # Disabled by default
+    allocation: 0.25 # 25% of capital
+    parameters:
+      lookbackPeriod: 20
+      breakoutThreshold: 0.01 # 1% breakout threshold
+    riskManagement:
+      stopLoss: 0.025 # 2.5% stop loss
+      takeProfit: 0.05 # 5% take profit
+      trailingStop: true
+
+# Risk Management
+riskManagement:
+  maxDrawdown: 0.15 # 15% maximum drawdown
+  correlationLimit: 0.7 # Maximum correlation between positions
+  sectorLimit: 0.3 # Maximum allocation to single sector
+  volatilityFilter: true # Filter trades based on volatility
+  newsFilter: true # Avoid trading during major news events
+
+# Monitoring and Alerts
+monitoring:
+  logLevel: "info"
+  saveTrades: true
+  performanceTracking: true
+  alerts:
+    email: false
+    telegram: true
+    webhook: false
+
+# Telegram Configuration
+telegram:
+  enabled: true
+  botToken: "${TELEGRAM_BOT_TOKEN}"
+  chatId: "${TELEGRAM_CHAT_ID}"
+  notifications:
+    tradeSignals: true
+    tradeExecutions: true
+    positionUpdates: true
+    performanceUpdates: true
+    systemAlerts: true
+    dailyReports: true
+    errorAlerts: true
+  updateInterval: 30 # minutes
+
+  # Performance thresholds
+  thresholds:
+    dailyLoss: 3000 # Alert at 3K loss
+    consecutiveLosses: 3 # Alert after 3 consecutive losses
+    winRate: 0.4 # Alert if win rate drops below 40%
+
+# Database Configuration
+database:
+  enabled: true
+  type: "sqlite" # or "postgres"
+  path: "./data/trading.db"
+
+# Backtesting Configuration
+backtesting:
+  enabled: false
+  startDate: "2024-01-01"
+  endDate: "2024-12-31"
+  initialCapital: 100000
+  commission: 0.0005 # 0.05% commission
+  slippage: 0.0001 # 0.01% slippage

@@ -67,7 +67,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         const bbArr = this.calculateBollingerBands(schemaData as any, bbPeriod, bbStdDev);
         const bb = Array.isArray(bbArr) ? (bbArr.length > 0 ? bbArr[bbArr.length - 1] : { upper: 0, middle: 0, lower: 0 }) : (bbArr ?? { upper: 0, middle: 0, lower: 0 });
         const momentumArr = this.calculateMomentum(schemaData as any, momentumPeriod);
-        const momentum = ensureNumber(Array.isArray(momentumArr) ? (momentumArr.length > 0 ? momentumArr[momentumArr.length - 1] : 0) : (typeof momentumArr === 'number' ? momentumArr : 0));
+        const momentum = Array.isArray(momentumArr) ? momentumArr : [momentumArr || 0];
         const volumeProfileArr = this.calculateVolumeProfile(schemaData as any, 20);
         const volumeProfile = Array.isArray(volumeProfileArr) ? (volumeProfileArr.length > 0 ? volumeProfileArr[volumeProfileArr.length - 1] : { aboveAverage: false, increasing: false, average: 0 }) : (volumeProfileArr ?? { aboveAverage: false, increasing: false, average: 0 });
 
@@ -86,10 +86,10 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
             const prevMACD = macd;
             const currentADX = adx;
             const currentBB = bb;
-            const currentMomentum = Number(momentum) || 0;
+            const currentMomentum = Number(momentum?.[i]) || 0;
             const currentVolumeProfile = volumeProfile;
 
-            if (!this.isValidIndicatorSet(currentRSI, currentMACD, currentADX, currentBB, currentMomentum)) {
+            if (!this.isValidIndicatorSet(currentRSI, currentMACD, currentADX ?? 0, currentBB, currentMomentum)) {
                 continue;
             }
 
@@ -101,7 +101,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
                 Number(currentMACD) || 0, Number(prevMACD) || 0,
                 Number(currentADX) || 0,
                 currentBB || { upper: 0, middle: 0, lower: 0 },
-                momentum,
+                currentMomentum,
                 currentVolumeProfile || { aboveAverage: false, increasing: false, average: 0 },
                 currentData || { symbol: '', timestamp: new Date(), open: null, high: null, low: null, close: null, volume: null }
             );
@@ -119,7 +119,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
                 currentMACD ?? 0, prevMACD ?? 0,
                 currentADX ?? 0,
                 currentBB ?? { upper: 0, middle: 0, lower: 0 },
-                momentum,
+                currentMomentum,
                 currentVolumeProfile ?? { aboveAverage: false, increasing: false, average: 0 },
                 currentData ?? { symbol: '', timestamp: new Date(), open: null, high: null, low: null, close: null, volume: null }
             );
@@ -635,7 +635,7 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         return volumeProfile;
     }
 
-    private isValidIndicatorSet(rsi: number, macd: number, adx: number, bb: any, momentum: number[]): boolean {
+    private isValidIndicatorSet(rsi: number, macd: number, adx: number, bb: any, momentum: number): boolean {
         return rsi != null && macd != null && adx != null && bb != null && momentum != null;
     }
 

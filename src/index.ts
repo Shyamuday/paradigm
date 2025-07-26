@@ -43,6 +43,10 @@ import { circuitBreakerManager } from './middleware/circuit-breaker';
 import { performanceMonitor } from './services/performance-monitor.service';
 import { logger } from './logger/logger';
 
+// Import Personal Trading System
+import { PersonalTradingSystem, startPersonalTradingWithTelegram } from './examples/personal-trading-setup';
+import { TelegramNotificationService } from './services/telegram-notification.service';
+
 // ============================================================================
 // SYSTEM INITIALIZATION HELPERS
 // ============================================================================
@@ -118,6 +122,201 @@ export async function quickStart() {
 }
 
 // ============================================================================
+// PERSONAL TRADING SYSTEM - ONE COMMAND AUTO-START
+// ============================================================================
+
+/**
+ * Start Personal Trading System with Telegram Notifications
+ * This is the main entry point for automated personal trading.
+ * Runs everything automatically with one command.
+ * 
+ * Features:
+ * - Automated trading with 3 strategies
+ * - Real-time Telegram notifications
+ * - Risk management with stop losses
+ * - Performance tracking
+ * - 24/7 monitoring
+ * 
+ * @returns {Promise<void>}
+ */
+export async function startPersonalTrading() {
+  try {
+    logger.info('🚀 Starting Personal Trading System with Telegram Notifications...');
+
+    // Start the complete personal trading system
+    await startPersonalTradingWithTelegram();
+
+    logger.info('✅ Personal Trading System started successfully');
+    logger.info('📱 Check your Telegram for notifications');
+    logger.info('🔄 System will run automatically until stopped');
+
+  } catch (error) {
+    logger.error('❌ Failed to start Personal Trading System:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create and configure Personal Trading System instance
+ * Allows custom configuration before starting
+ * 
+ * @param {object} config - Custom configuration
+ * @returns {Promise<PersonalTradingSystem>} Configured trading system
+ */
+export async function createPersonalTradingSystem(config?: any) {
+  const defaultConfig = {
+    apiKey: process.env.KITE_API_KEY || '',
+    apiSecret: process.env.KITE_API_SECRET || '',
+    accessToken: process.env.KITE_ACCESS_TOKEN || '',
+    instruments: ['NIFTY', 'BANKNIFTY'],
+    capital: parseInt(process.env.TRADING_CAPITAL || '100000'),
+    maxRiskPerTrade: parseFloat(process.env.MAX_RISK_PER_TRADE || '0.02'),
+    maxDailyLoss: parseInt(process.env.MAX_DAILY_LOSS || '5000'),
+    tradingHours: {
+      start: '09:15',
+      end: '15:30'
+    },
+    strategies: {
+      moving_average: {
+        enabled: true,
+        allocation: 0.3,
+        parameters: {
+          shortPeriod: 10,
+          longPeriod: 20,
+          volumeThreshold: 1000
+        }
+      },
+      rsi: {
+        enabled: true,
+        allocation: 0.2,
+        parameters: {
+          period: 14,
+          overbought: 70,
+          oversold: 30
+        }
+      }
+    },
+    telegram: {
+      botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+      chatId: process.env.TELEGRAM_CHAT_ID || '',
+      enabled: true,
+      notifications: {
+        tradeSignals: true,
+        tradeExecutions: true,
+        positionUpdates: true,
+        performanceUpdates: true,
+        systemAlerts: true,
+        dailyReports: true,
+        errorAlerts: true
+      },
+      updateInterval: 30
+    }
+  };
+
+  const finalConfig = { ...defaultConfig, ...config };
+  const tradingSystem = new PersonalTradingSystem(finalConfig);
+
+  return tradingSystem;
+}
+
+/**
+ * Test Telegram Notifications
+ * Sends test messages to verify Telegram setup
+ * 
+ * @returns {Promise<void>}
+ */
+export async function testTelegramNotifications() {
+  try {
+    logger.info('🧪 Testing Telegram Notifications...');
+
+    const telegramConfig = {
+      botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+      chatId: process.env.TELEGRAM_CHAT_ID || '',
+      enabled: true,
+      notifications: {
+        tradeSignals: true,
+        tradeExecutions: true,
+        positionUpdates: true,
+        performanceUpdates: true,
+        systemAlerts: true,
+        dailyReports: true,
+        errorAlerts: true
+      },
+      updateInterval: 30
+    };
+
+    const telegramService = new TelegramNotificationService(telegramConfig);
+
+    // Test connection
+    const isConnected = await telegramService.testConnection();
+    if (!isConnected) {
+      throw new Error('Failed to connect to Telegram bot');
+    }
+
+    // Send test messages
+    await telegramService.sendCustomMessage(`
+🧪 **TELEGRAM TEST** 🧪
+
+✅ Connection successful!
+🤖 Bot is working properly
+📱 Ready for trading notifications
+
+⏰ Test completed at ${new Date().toLocaleString()}
+    `.trim());
+
+    logger.info('✅ Telegram notifications test completed successfully');
+
+  } catch (error) {
+    logger.error('❌ Telegram test failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get System Status
+ * Returns current status of all system components
+ * 
+ * @returns {Promise<object>} System status
+ */
+export async function getSystemStatus() {
+  try {
+    const status = {
+      system: {
+        version: VERSION,
+        name: SYSTEM_NAME,
+        uptime: process.uptime(),
+        memory: process.memoryUsage(),
+        timestamp: new Date().toISOString()
+      },
+      database: {
+        connected: DatabaseService.getInstance().isConnectionActive(),
+        status: 'ok'
+      },
+      cache: {
+        status: 'initialized'
+      },
+      performance: {
+        active: performanceMonitor.getStatus().isMonitoring,
+        metrics: performanceMonitor.getAllMetrics()
+      },
+      telegram: {
+        enabled: !!process.env.TELEGRAM_BOT_TOKEN,
+        configured: !!(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
+      },
+      trading: {
+        apiConfigured: !!(process.env.KITE_API_KEY && process.env.KITE_API_SECRET),
+        accessToken: !!process.env.KITE_ACCESS_TOKEN
+      }
+    };
+
+    return status;
+  } catch (error) {
+    logger.error('Failed to get system status:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
 // VERSION & METADATA
 // ============================================================================
 
@@ -162,7 +361,9 @@ export const metadata = {
     'Technical analysis',
     'Options trading support',
     'Backtesting engine',
-    'Portfolio management'
+    'Portfolio management',
+    'Telegram notifications',
+    'Personal trading system'
   ],
   architecture: {
     layers: [
@@ -171,7 +372,8 @@ export const metadata = {
       'Trading Services',
       'Strategy Engine',
       'Data Management',
-      'Monitoring & UI'
+      'Monitoring & UI',
+      'Personal Trading'
     ],
     patterns: [
       'Circuit Breaker',
@@ -179,7 +381,8 @@ export const metadata = {
       'Strategy Pattern',
       'Observer Pattern',
       'Factory Pattern',
-      'Middleware Pattern'
+      'Middleware Pattern',
+      'Telegram Integration'
     ]
   }
 };
@@ -197,5 +400,46 @@ export default {
   examples,
   initializeParadigmSystem,
   quickStart,
+  startPersonalTrading,
+  createPersonalTradingSystem,
+  testTelegramNotifications,
+  getSystemStatus,
   metadata
-}; 
+};
+
+// ============================================================================
+// AUTO-START WHEN EXECUTED DIRECTLY
+// ============================================================================
+
+// If this file is executed directly, start the personal trading system
+if (require.main === module) {
+  logger.info('🚀 Paradigm Trading System - Auto-Starting Personal Trading...');
+
+  // Check if Telegram test is requested
+  if (process.argv.includes('--test-telegram')) {
+    testTelegramNotifications()
+      .then(() => {
+        logger.info('✅ Telegram test completed');
+        process.exit(0);
+      })
+      .catch((error) => {
+        logger.error('❌ Telegram test failed:', error);
+        process.exit(1);
+      });
+  } else {
+    // Start personal trading system
+    startPersonalTrading()
+      .then(() => {
+        logger.info('✅ Personal trading system started successfully');
+        // Keep the process running
+        process.on('SIGINT', () => {
+          logger.info('🛑 Received shutdown signal. Stopping...');
+          process.exit(0);
+        });
+      })
+      .catch((error) => {
+        logger.error('❌ Failed to start personal trading system:', error);
+        process.exit(1);
+      });
+  }
+} 

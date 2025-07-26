@@ -283,13 +283,17 @@ export class ErrorHandler extends EventEmitter2 {
     const message = error.message.toLowerCase();
     const name = error.name.toLowerCase();
 
-    // Network errors
-    if (name.includes('network') || name.includes('timeout') || name.includes('connection') || message.includes('network') || message.includes('timeout') || message.includes('connection') || message.includes('timed out') || message.includes('unreachable') || message.includes('refused')) {
-      return ErrorCategory.NETWORK;
+    // Database errors (check first to avoid conflicts with network errors)
+    if (name.includes('database') || name.includes('prisma') || name.includes('sql') ||
+      message.includes('database') || message.includes('sql') || message.includes('db') ||
+      message.includes('connection failed') || message.includes('query failed') || message.includes('deadlock')) {
+      return ErrorCategory.DATABASE;
     }
 
     // Authentication errors
-    if (name.includes('auth') || message.includes('unauthorized') || message.includes('token') || message.includes('auth') || message.includes('login') || message.includes('credential') || message.includes('forbidden')) {
+    if (name.includes('auth') || message.includes('unauthorized') || message.includes('token') ||
+      message.includes('auth') || message.includes('login') || message.includes('credential') ||
+      message.includes('forbidden')) {
       return ErrorCategory.AUTHENTICATION;
     }
 
@@ -298,23 +302,29 @@ export class ErrorHandler extends EventEmitter2 {
       return ErrorCategory.API_RATE_LIMIT;
     }
 
-    // Database errors
-    if (name.includes('prisma') || name.includes('database') || name.includes('sql') || message.includes('database') || message.includes('sql') || message.includes('db') || message.includes('connection failed') || message.includes('query failed') || message.includes('deadlock')) {
-      return ErrorCategory.DATABASE;
+    // Network errors (check after database to avoid conflicts)
+    if (name.includes('network') || name.includes('timeout') ||
+      message.includes('network') || message.includes('timeout') || message.includes('timed out') ||
+      message.includes('unreachable') || message.includes('refused')) {
+      return ErrorCategory.NETWORK;
     }
 
-    // Validation errors
-    if (name.includes('validation') || name.includes('invalid') || message.includes('validation') || message.includes('invalid') || message.includes('not allowed') || message.includes('required')) {
-      return ErrorCategory.VALIDATION;
-    }
-
-    // Trading errors
-    if (message.includes('order') || message.includes('position') || message.includes('trade') || message.includes('execution') || message.includes('fill')) {
+    // Trading errors (check before validation to avoid conflicts)
+    if (message.includes('order') || message.includes('position') || message.includes('trade') ||
+      message.includes('execution') || message.includes('fill')) {
       return ErrorCategory.TRADING;
     }
 
+    // Validation errors
+    if (name.includes('validation') || name.includes('invalid') ||
+      message.includes('validation') || message.includes('invalid') || message.includes('not allowed') ||
+      message.includes('required')) {
+      return ErrorCategory.VALIDATION;
+    }
+
     // Market data errors
-    if (message.includes('market') || message.includes('quote') || message.includes('price') || message.includes('ticker')) {
+    if (message.includes('market') || message.includes('quote') || message.includes('price') ||
+      message.includes('ticker')) {
       return ErrorCategory.MARKET_DATA;
     }
 

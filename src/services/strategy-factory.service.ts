@@ -1,18 +1,26 @@
-import { IStrategy } from './strategies/strategy.interface';
+import { IStrategy, BaseStrategy } from './strategy-engine.service';
 import { MovingAverageStrategy } from './strategies/moving-average-strategy';
 import { RsiStrategy } from './strategies/rsi-strategy';
+import { BreakoutStrategy } from './strategies/breakout-strategy';
+import { ADXStrategy } from './strategies/adx-strategy';
+import { EnhancedMomentumStrategy } from './strategies/enhanced-momentum-strategy';
+import { OptionsStrategy } from './strategies/options-strategy';
+import { StrategyConfig } from '../schemas/strategy.schema';
 import { logger } from '../logger/logger';
 
 export class StrategyFactory {
-    private static strategies: { [key: string]: new () => IStrategy } = {
+    private static strategies: { [key: string]: new () => any } = {
         moving_average: MovingAverageStrategy,
         rsi: RsiStrategy,
+        breakout: BreakoutStrategy,
+        momentum: EnhancedMomentumStrategy,
+        options: OptionsStrategy,
     };
 
-    static async createStrategy(name: string, config: any): Promise<IStrategy | null> {
+    static async createStrategy(name: string, config: StrategyConfig): Promise<IStrategy | null> {
         const StrategyClass = this.strategies[name];
         if (!StrategyClass) {
-            logger.error(`Strategy '${name}' not found.`);
+            logger.error(`Strategy '${name}' not found. Available strategies: ${Object.keys(this.strategies).join(', ')}`);
             return null;
         }
 
@@ -31,5 +39,24 @@ export class StrategyFactory {
             logger.warn(`Strategy '${name}' is already registered. Overwriting.`);
         }
         this.strategies[name] = strategyClass;
+        logger.info(`Strategy '${name}' registered successfully.`);
+    }
+
+    static getAvailableStrategies(): string[] {
+        return Object.keys(this.strategies);
+    }
+
+    static getStrategyInfo(name: string): { name: string; description: string; type: string } | null {
+        const StrategyClass = this.strategies[name];
+        if (!StrategyClass) {
+            return null;
+        }
+
+        const instance = new StrategyClass();
+        return {
+            name: instance.name,
+            description: instance.description || '',
+            type: instance.type
+        };
     }
 }

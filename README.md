@@ -99,16 +99,42 @@ This project uses a **fully automatic TOTP-based authentication** system for Zer
 
    ```bash
    cp env.example .env
-   # Edit .env with your credentials
+   # Edit .env with your Zerodha credentials and Telegram bot details
    ```
 
-4. **Test authentication**
+4. **Test Telegram notifications**
+
+   ```bash
+   npm run test-telegram
+   ```
+
+5. **Start automated trading (one command)**
+
+   ```bash
+   npm run trading:auto
+   ```
+
+   **OR use the detailed setup**
+
+   ```bash
+   npm run trading:personal
+   ```
+
+   cp env.example .env
+
+   # Edit .env with your credentials
+
+   ```
+
+   ```
+
+6. **Test authentication**
 
    ```bash
    npm run auth:test
    ```
 
-5. **Start the trading bot**
+7. **Start the trading bot**
    ```bash
    npm run dev
    ```
@@ -130,6 +156,33 @@ This project uses a **fully automatic TOTP-based authentication** system for Zer
 - `npm run dev` - Start the trading bot
 - `npm run dashboard` - Launch terminal dashboard
 - `npm run bot:test` - Test complete system
+
+## 🎯 Available Strategies
+
+### **Core Strategies:**
+
+- **Moving Average Crossover**: Simple trend following with MA crossovers
+- **RSI Mean Reversion**: RSI-based overbought/oversold signals
+- **Breakout Strategy**: Support/resistance breakout detection
+- **ADX Strategy**: Advanced trend strength and direction analysis
+- **Machine Learning Strategy**: ML-based pattern recognition
+
+### **Strategy Features:**
+
+- ✅ **Real-time signal generation**
+- ✅ **Dynamic position sizing**
+- ✅ **Risk management integration**
+- ✅ **Performance tracking**
+- ✅ **Multi-timeframe support**
+- ✅ **Telegram notifications**
+
+### **Test Strategies:**
+
+```bash
+npm run trading:test          # Test all strategies
+npm run test:adx             # Test ADX strategy specifically
+npm run backtest             # Run comprehensive backtesting
+```
 
 ## 🔧 Authentication Methods
 
