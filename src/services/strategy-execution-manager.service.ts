@@ -160,7 +160,13 @@ export class StrategyExecutionManager extends EventEmitter {
 
         let insertIndex = 0;
         for (let i = 0; i < this.taskQueue.length; i++) {
-            const currentPriority = this.config.priorityLevels[this.taskQueue[i].priority];
+            const task = this.taskQueue[i];
+            if (!task) continue;
+
+            const currentPriority = this.config.priorityLevels[task.priority];
+            if (currentPriority === undefined) {
+                continue; // Skip tasks with invalid priority
+            }
             if (priorityValue > currentPriority) {
                 insertIndex = i;
                 break;
@@ -212,6 +218,7 @@ export class StrategyExecutionManager extends EventEmitter {
         // Process results
         results.forEach((result, index) => {
             const task = tasksToProcess[index];
+            if (!task) return; // Skip if task is undefined
             if (result.status === 'fulfilled') {
                 this.handleSuccessfulExecution(result.value);
             } else {

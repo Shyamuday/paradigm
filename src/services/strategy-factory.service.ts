@@ -2,7 +2,6 @@ import { IStrategy, BaseStrategy } from './strategy-engine.service';
 import { MovingAverageStrategy } from './strategies/moving-average-strategy';
 import { RsiStrategy } from './strategies/rsi-strategy';
 import { BreakoutStrategy } from './strategies/breakout-strategy';
-import { ADXStrategy } from './strategies/adx-strategy';
 import { EnhancedMomentumStrategy } from './strategies/enhanced-momentum-strategy';
 import { OptionsStrategy } from './strategies/options-strategy';
 import { StrategyConfig } from '../schemas/strategy.schema';

@@ -1,11 +1,10 @@
 import { BaseStrategy } from '../strategy-engine.service';
 import { logger } from '../../logger/logger';
 import {
-    StrategyConfig,
+
     TradeSignal,
     MarketData,
-    Position,
-    StrategyType
+    Position
 } from '../../types';
 
 // Options-specific interfaces

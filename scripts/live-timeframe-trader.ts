@@ -2,7 +2,6 @@
 
 import { config } from 'dotenv';
 import { TimeframeAnalyzer, Timeframe } from '../src/services/timeframe-analyzer.service';
-import { IntelligentAutoTrader } from '../src/services/intelligent-auto-trader.service';
 import { ConfigManager } from '../src/config/config-manager';
 import { logger } from '../src/logger/logger';
 import KiteConnect from 'kiteconnect';

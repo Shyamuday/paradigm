@@ -2,7 +2,6 @@
 
 import { config } from 'dotenv';
 import { DatabaseManager } from '../src/database/database';
-import { logger } from '../src/logger/logger';
 import { PrismaClient } from '@prisma/client';
 
 // Load environment variables

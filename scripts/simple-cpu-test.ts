@@ -1,7 +1,6 @@
 #!/usr/bin/env ts-node
 
 import { config } from 'dotenv';
-import { logger } from '../src/logger/logger';
 
 // Load environment variables
 config();

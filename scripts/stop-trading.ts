@@ -3,8 +3,6 @@
 import { logger } from '../src/logger/logger';
 import { performanceMonitor } from '../src/services/performance-monitor.service';
 import { NotificationService } from '../src/services/notification.service';
-import { WebSocketManager } from '../src/services/websocket-manager.service';
-import { LiveDataIntegrationService } from '../src/services/live-data-integration.service';
 
 /**
  * Stop Trading Script

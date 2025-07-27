@@ -1,7 +1,6 @@
 import * as blessed from 'blessed';
 import * as contrib from 'blessed-contrib';
 import { logger } from '../logger/logger';
-import { mathUtils } from './math-utils.service';
 
 export interface ChartData {
   symbol: string;

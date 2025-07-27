@@ -8,7 +8,6 @@ import { MovingAverageStrategy } from '../src/services/strategies/moving-average
 import { RsiStrategy } from '../src/services/strategies/rsi-strategy';
 import { BreakoutStrategy } from '../src/services/strategies/breakout-strategy';
 import { MarketData } from '../src/schemas/strategy.schema';
-import { logger } from '../src/logger/logger';
 
 // Load environment variables
 config();
