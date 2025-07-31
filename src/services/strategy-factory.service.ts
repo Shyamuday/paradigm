@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { IStrategy, BaseStrategy } from './strategy-engine.service';
 import { MovingAverageStrategy } from './strategies/moving-average-strategy';
 import { RsiStrategy } from './strategies/rsi-strategy';
@@ -22,6 +23,23 @@ export class StrategyFactory {
         const StrategyClass = this.strategies[name];
         if (!StrategyClass) {
             logger.error(`Strategy '${name}' not found. Available strategies: ${Object.keys(this.strategies).join(', ')}`);
+=======
+import { IStrategy } from './strategies/strategy.interface';
+import { MovingAverageStrategy } from './strategies/moving-average-strategy';
+import { RsiStrategy } from './strategies/rsi-strategy';
+import { logger } from '../logger/logger';
+
+export class StrategyFactory {
+    private static strategies: { [key: string]: new () => IStrategy } = {
+        moving_average: MovingAverageStrategy,
+        rsi: RsiStrategy,
+    };
+
+    static async createStrategy(name: string, config: any): Promise<IStrategy | null> {
+        const StrategyClass = this.strategies[name];
+        if (!StrategyClass) {
+            logger.error(`Strategy '${name}' not found.`);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             return null;
         }
 
@@ -40,6 +58,7 @@ export class StrategyFactory {
             logger.warn(`Strategy '${name}' is already registered. Overwriting.`);
         }
         this.strategies[name] = strategyClass;
+<<<<<<< HEAD
         logger.info(`Strategy '${name}' registered successfully.`);
     }
 
@@ -59,5 +78,7 @@ export class StrategyFactory {
             description: instance.description || '',
             type: instance.type
         };
+=======
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     }
 }

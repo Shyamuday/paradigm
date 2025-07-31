@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 import { BaseStrategy } from '../strategy-engine.service';
 import { logger } from '../../logger/logger';
 import { StrategyConfig, Position, StrategyState, StrategyPerformance, MarketData, TradeSignal, StrategyType } from '../../schemas/strategy.schema';
+=======
+import { IStrategy, MarketData, TradeSignal } from './strategy.interface';
+import { logger } from '../../logger/logger';
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 interface RsiConfig {
     period: number;
@@ -8,6 +13,7 @@ interface RsiConfig {
     oversold: number;
 }
 
+<<<<<<< HEAD
 export class RsiStrategy extends BaseStrategy {
     private rsiConfig!: RsiConfig;
     private performance: StrategyPerformance = {
@@ -41,10 +47,24 @@ export class RsiStrategy extends BaseStrategy {
     validateConfig(config: StrategyConfig): boolean {
         const { period, overbought, oversold } = config.parameters;
         return !!(period && overbought && oversold);
+=======
+export class RsiStrategy implements IStrategy {
+    public name = 'rsi';
+    public description = 'A Relative Strength Index (RSI) based strategy.';
+    private config!: RsiConfig;
+
+    async initialize(config: any): Promise<void> {
+        if (!config.period || !config.overbought || !config.oversold) {
+            throw new Error('Missing required configuration for RsiStrategy.');
+        }
+        this.config = config;
+        logger.info('RsiStrategy initialized with config:', this.config);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     }
 
     async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
         const signals: TradeSignal[] = [];
+<<<<<<< HEAD
         if (marketData.length < this.rsiConfig.period) {
             return signals;
         }
@@ -52,6 +72,15 @@ export class RsiStrategy extends BaseStrategy {
         const rsiValues = this.calculateRSIValues(marketData, this.rsiConfig.period);
 
         for (let i = this.rsiConfig.period; i < marketData.length; i++) {
+=======
+        if (marketData.length < this.config.period) {
+            return signals;
+        }
+
+        const rsiValues = this.calculateRSI(marketData, this.config.period);
+
+        for (let i = this.config.period; i < marketData.length; i++) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             const currentData = marketData[i];
             if (!currentData) continue;
 
@@ -59,6 +88,7 @@ export class RsiStrategy extends BaseStrategy {
             const prevRsi = rsiValues[i - 1];
 
             if (currentRsi !== null && prevRsi !== null) {
+<<<<<<< HEAD
                 if (prevRsi! <= this.rsiConfig.oversold && currentRsi! > this.rsiConfig.oversold) {
                     signals.push({
                         id: crypto.randomUUID(),
@@ -70,10 +100,20 @@ export class RsiStrategy extends BaseStrategy {
                         confidence: 70,
                         timestamp: currentData.timestamp,
                         strategyName: this.name,
+=======
+                if (prevRsi! <= this.config.oversold && currentRsi! > this.config.oversold) {
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'BUY',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
                         metadata: {
                             rsi: currentRsi,
                         },
                     });
+<<<<<<< HEAD
                 } else if (prevRsi! >= this.rsiConfig.overbought && currentRsi! < this.rsiConfig.overbought) {
                     signals.push({
                         id: crypto.randomUUID(),
@@ -85,6 +125,15 @@ export class RsiStrategy extends BaseStrategy {
                         confidence: 70,
                         timestamp: currentData.timestamp,
                         strategyName: this.name,
+=======
+                } else if (prevRsi! >= this.config.overbought && currentRsi! < this.config.overbought) {
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'SELL',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
                         metadata: {
                             rsi: currentRsi,
                         },
@@ -93,6 +142,7 @@ export class RsiStrategy extends BaseStrategy {
             }
         }
 
+<<<<<<< HEAD
         this.state.totalSignals += signals.length;
         this.state.lastExecution = new Date();
 
@@ -150,6 +200,12 @@ export class RsiStrategy extends BaseStrategy {
     }
 
     private calculateRSIValues(data: MarketData[], period: number): (number | null)[] {
+=======
+        return signals;
+    }
+
+    private calculateRSI(data: MarketData[], period: number): (number | null)[] {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
         const rsi: (number | null)[] = [];
         for (let i = 0; i < data.length; i++) {
             rsi.push(null);
@@ -162,7 +218,11 @@ export class RsiStrategy extends BaseStrategy {
         for (let i = 1; i <= period; i++) {
             const current = data[i];
             const previous = data[i - 1];
+<<<<<<< HEAD
             if (!current || !previous || current.close === null || previous.close === null) continue;
+=======
+            if (!current || !previous) continue;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             const change = current.close - previous.close;
             if (change > 0) {
                 gains += change;
@@ -185,7 +245,11 @@ export class RsiStrategy extends BaseStrategy {
         for (let i = period + 1; i < data.length; i++) {
             const current = data[i];
             const previous = data[i - 1];
+<<<<<<< HEAD
             if (!current || !previous || current.close === null || previous.close === null) continue;
+=======
+            if (!current || !previous) continue;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             const change = current.close - previous.close;
             let currentGain = 0;
             let currentLoss = 0;

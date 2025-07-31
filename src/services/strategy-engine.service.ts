@@ -24,7 +24,10 @@ import {
     type PositionSizingConfig
 } from '../schemas/strategy.schema';
 import { z } from 'zod';
+<<<<<<< HEAD
 import { enhancedTechnicalIndicators } from './enhanced-technical-indicators.service';
+=======
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 // Base Strategy Interface
 export interface IStrategy {
@@ -288,6 +291,7 @@ export abstract class BaseStrategy implements IStrategy {
     }
 
     protected calculateIndicatorValue(indicator: any, marketData: MarketData[]): number {
+<<<<<<< HEAD
         // Calculate indicator value based on type using enhanced service
         const prices = marketData.map(d => d.close || 0).filter(price => price > 0);
 
@@ -303,13 +307,62 @@ export abstract class BaseStrategy implements IStrategy {
             case 'MACD':
                 const macdResult = enhancedTechnicalIndicators.calculateMACD(prices, indicator.fastPeriod, indicator.slowPeriod);
                 return macdResult.macd.length > 0 ? (macdResult.macd[macdResult.macd.length - 1] || 0) : 0;
+=======
+        // Calculate indicator value based on type
+        switch (indicator.type) {
+            case 'MOVING_AVERAGE':
+                return this.calculateMovingAverage(marketData, indicator.period);
+
+            case 'RSI':
+                return this.calculateRSI(marketData, indicator.period);
+
+            case 'MACD':
+                return this.calculateMACD(marketData, indicator.fastPeriod, indicator.slowPeriod);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
             default:
                 return 0;
         }
     }
 
+<<<<<<< HEAD
     // Using enhanced technical indicators service instead of local calculations
+=======
+    protected calculateMovingAverage(data: MarketData[], period: number): number {
+        if (data.length < period) return 0;
+
+        const recentData = data.slice(-period);
+        const sum = recentData.reduce((acc, d) => acc + (d.close || 0), 0);
+        return sum / period;
+    }
+
+    protected calculateRSI(data: MarketData[], period: number): number {
+        if (data.length < period + 1) return 50;
+
+        let gains = 0;
+        let losses = 0;
+
+        for (let i = data.length - period; i < data.length; i++) {
+            const change = (data[i]?.close || 0) - (data[i - 1]?.close || 0);
+            if (change > 0) gains += change;
+            else losses -= change;
+        }
+
+        const avgGain = gains / period;
+        const avgLoss = losses / period;
+
+        if (avgLoss === 0) return 100;
+
+        const rs = avgGain / avgLoss;
+        return 100 - (100 / (1 + rs));
+    }
+
+    protected calculateMACD(data: MarketData[], fastPeriod: number, slowPeriod: number): number {
+        const fastMA = this.calculateMovingAverage(data, fastPeriod);
+        const slowMA = this.calculateMovingAverage(data, slowPeriod);
+        return fastMA - slowMA;
+    }
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 }
 
 // Strategy Engine Service

@@ -2,6 +2,10 @@ import { KiteConnect } from 'kiteconnect';
 import * as fs from 'fs';
 import * as path from 'path';
 import express from 'express';
+<<<<<<< HEAD
+=======
+const open = require('open');
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 import { logger } from '../logger/logger';
 import {
     SessionDataSchema,
@@ -88,7 +92,15 @@ export class ZerodhaAuth {
                     // Validate the response using Zod
                     const validatedSession = ZerodhaLoginResponseSchema.parse(sessionResponse);
 
+<<<<<<< HEAD
                     const session = validatedSession;
+=======
+                    if (validatedSession.status === 'error' || !validatedSession.data) {
+                        throw new Error(validatedSession.message || 'Login failed');
+                    }
+
+                    const session = validatedSession.data;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
                     // Set the access token
                     this.kite.setAccessToken(session.access_token);
@@ -118,7 +130,11 @@ export class ZerodhaAuth {
                     // Test API access
                     const profileTestResponse = await this.kite.getProfile();
                     const validatedProfileTest = AccessTokenValidationSchema.parse(profileTestResponse);
+<<<<<<< HEAD
                     console.log('\nAPI Connection Test: ✅ Successful');
+=======
+                    console.log('\nAPI Connection Test:', validatedProfileTest.status === 'success' ? '✅ Successful' : '❌ Failed');
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
                     resolve();
                 } catch (error) {
@@ -133,7 +149,11 @@ export class ZerodhaAuth {
             });
 
             // Start server and open browser
+<<<<<<< HEAD
             const server = app.listen(PORT, async () => {
+=======
+            const server = app.listen(PORT, () => {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
                 console.log(`
 🔐 Zerodha OAuth Login
 ----------------------
@@ -141,6 +161,7 @@ export class ZerodhaAuth {
 2. Opening Kite login page in your browser
 3. After login, you'll be redirected back here
                 `);
+<<<<<<< HEAD
 
                 // Open browser (only in non-test environment)
                 if (process.env.NODE_ENV !== 'test') {
@@ -153,6 +174,9 @@ export class ZerodhaAuth {
                 } else {
                     console.log('Test environment detected. Please open http://localhost:3000 manually if needed.');
                 }
+=======
+                open(`http://localhost:${PORT}`);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             });
 
             // Cleanup
@@ -176,7 +200,15 @@ export class ZerodhaAuth {
             // Validate the profile response using Zod
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
 
+<<<<<<< HEAD
             const profile = validatedProfile;
+=======
+            if (validatedProfile.status === 'error' || !validatedProfile.data) {
+                throw new Error(validatedProfile.message || 'Token validation failed');
+            }
+
+            const profile = validatedProfile.data;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
             // Save session
             await this.saveSession({
@@ -234,8 +266,18 @@ export class ZerodhaAuth {
             // Validate the profile response
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
 
+<<<<<<< HEAD
             console.log('\n✅ Valid session found');
             console.log(`User: ${validatedProfile.user_name}`);
+=======
+            if (validatedProfile.status === 'error' || !validatedProfile.data) {
+                logger.warn('Session validation failed:', validatedProfile.message);
+                return false;
+            }
+
+            console.log('\n✅ Valid session found');
+            console.log(`User: ${validatedProfile.data.user_name}`);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
             return true;
         } catch (error) {

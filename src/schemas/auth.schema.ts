@@ -10,6 +10,7 @@ export const LoginCredentialsSchema = z.object({
   totp: z.string().optional(), // Optional for TOTP if enabled
 });
 
+<<<<<<< HEAD
 // Zerodha login response schema (direct response from Zerodha API)
 export const ZerodhaLoginResponseSchema = z.object({
   user_id: z.string(),
@@ -28,6 +29,30 @@ export const ZerodhaLoginResponseSchema = z.object({
   meta: z.object({
     demat_consent: z.string().optional(),
   }).optional(),
+=======
+// Zerodha login response schema
+export const ZerodhaLoginResponseSchema = z.object({
+  status: z.enum(['success', 'error']),
+  data: z.object({
+    user_id: z.string(),
+    user_name: z.string(),
+    user_shortname: z.string().optional(),
+    email: z.string().email().optional(),
+    mobile: z.string().optional(),
+    api_key: z.string(),
+    access_token: z.string(),
+    refresh_token: z.string().optional(),
+    login_time: z.string(),
+    exchange: z.string().optional(),
+    order_types: z.array(z.string()).optional(),
+    products: z.array(z.string()).optional(),
+    broker: z.string().optional(),
+    meta: z.object({
+      demat_consent: z.string().optional(),
+    }).optional(),
+  }).optional(),
+  message: z.string().optional(),
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 });
 
 // Session data schema
@@ -47,6 +72,7 @@ export const SessionDataSchema = z.object({
   }).optional(),
 });
 
+<<<<<<< HEAD
 // Access token validation response (direct response from Zerodha API)
 export const AccessTokenValidationSchema = z.object({
   user_id: z.string(),
@@ -63,6 +89,25 @@ export const AccessTokenValidationSchema = z.object({
   meta: z.object({
     demat_consent: z.string().optional(),
   }).optional(),
+=======
+// Access token validation response
+export const AccessTokenValidationSchema = z.object({
+  status: z.enum(['success', 'error']),
+  data: z.object({
+    user_id: z.string(),
+    user_name: z.string(),
+    user_shortname: z.string().optional(),
+    email: z.string().email().optional(),
+    mobile: z.string().optional(),
+    api_key: z.string(),
+    login_time: z.string(),
+    exchange: z.string().optional(),
+    order_types: z.array(z.string()).optional(),
+    products: z.array(z.string()).optional(),
+    broker: z.string().optional(),
+  }).optional(),
+  message: z.string().optional(),
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 });
 
 // Error response schema

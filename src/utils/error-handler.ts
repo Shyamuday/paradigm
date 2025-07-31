@@ -175,7 +175,11 @@ export class ErrorHandler extends EventEmitter2 {
     for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
       try {
         const result = await operation();
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
         // Log successful retry if it wasn't the first attempt
         if (attempt > 1) {
           logger.info('Operation succeeded after retry', {
@@ -184,11 +188,19 @@ export class ErrorHandler extends EventEmitter2 {
             requestId: context.requestId
           });
         }
+<<<<<<< HEAD
 
         return result;
       } catch (error) {
         lastError = this.normalizeError(error as Error, context);
 
+=======
+        
+        return result;
+      } catch (error) {
+                 lastError = this.normalizeError(error as Error, context);
+        
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
         // Check if error is retryable
         if (!this.isRetryableError(lastError, config)) {
           throw lastError;
@@ -234,6 +246,7 @@ export class ErrorHandler extends EventEmitter2 {
    */
   public handleError(error: Error, context: ErrorContext = {}): void {
     const normalizedError = this.normalizeError(error, context);
+<<<<<<< HEAD
 
     // Update error counts
     this.updateErrorCount(normalizedError);
@@ -247,6 +260,20 @@ export class ErrorHandler extends EventEmitter2 {
     // Handle critical errors
     if (normalizedError.severity === ErrorSeverity.CRITICAL) {
       this.emit('criticalError', normalizedError); // Ensure both events are emitted
+=======
+    
+    // Update error counts
+    this.updateErrorCount(normalizedError);
+    
+    // Log error based on severity
+    this.logError(normalizedError);
+    
+    // Emit error event for external handlers
+    this.emit('error', normalizedError);
+    
+    // Handle critical errors
+    if (normalizedError.severity === ErrorSeverity.CRITICAL) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       this.handleCriticalError(normalizedError);
     }
   }
@@ -283,6 +310,7 @@ export class ErrorHandler extends EventEmitter2 {
     const message = error.message.toLowerCase();
     const name = error.name.toLowerCase();
 
+<<<<<<< HEAD
     // Database errors (check first to avoid conflicts with network errors)
     if (name.includes('database') || name.includes('prisma') || name.includes('sql') ||
       message.includes('database') || message.includes('sql') || message.includes('db') ||
@@ -294,10 +322,20 @@ export class ErrorHandler extends EventEmitter2 {
     if (name.includes('auth') || message.includes('unauthorized') || message.includes('token') ||
       message.includes('auth') || message.includes('login') || message.includes('credential') ||
       message.includes('forbidden')) {
+=======
+    // Network errors
+    if (name.includes('network') || name.includes('timeout') || name.includes('connection')) {
+      return ErrorCategory.NETWORK;
+    }
+
+    // Authentication errors
+    if (name.includes('auth') || message.includes('unauthorized') || message.includes('token')) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return ErrorCategory.AUTHENTICATION;
     }
 
     // Rate limit errors
+<<<<<<< HEAD
     if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
       return ErrorCategory.API_RATE_LIMIT;
     }
@@ -338,6 +376,32 @@ export class ErrorHandler extends EventEmitter2 {
       return ErrorCategory.CONFIGURATION;
     }
 
+=======
+    if (message.includes('rate limit') || message.includes('too many requests')) {
+      return ErrorCategory.API_RATE_LIMIT;
+    }
+
+    // Database errors
+    if (name.includes('prisma') || name.includes('database') || name.includes('sql')) {
+      return ErrorCategory.DATABASE;
+    }
+
+    // Validation errors
+    if (name.includes('validation') || name.includes('invalid')) {
+      return ErrorCategory.VALIDATION;
+    }
+
+    // Trading errors
+    if (message.includes('order') || message.includes('position') || message.includes('trade')) {
+      return ErrorCategory.TRADING;
+    }
+
+    // Market data errors
+    if (message.includes('market') || message.includes('quote') || message.includes('price')) {
+      return ErrorCategory.MARKET_DATA;
+    }
+
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     return ErrorCategory.UNKNOWN;
   }
 
@@ -353,16 +417,28 @@ export class ErrorHandler extends EventEmitter2 {
     }
 
     // High severity errors
+<<<<<<< HEAD
     if (category === ErrorCategory.AUTHENTICATION ||
       category === ErrorCategory.TRADING ||
       category === ErrorCategory.DATABASE) {
+=======
+    if (category === ErrorCategory.AUTHENTICATION || 
+        category === ErrorCategory.TRADING ||
+        category === ErrorCategory.DATABASE) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return ErrorSeverity.HIGH;
     }
 
     // Medium severity errors
+<<<<<<< HEAD
     if (category === ErrorCategory.NETWORK ||
       category === ErrorCategory.API_RATE_LIMIT ||
       category === ErrorCategory.EXTERNAL_API) {
+=======
+    if (category === ErrorCategory.NETWORK || 
+        category === ErrorCategory.API_RATE_LIMIT ||
+        category === ErrorCategory.EXTERNAL_API) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return ErrorSeverity.MEDIUM;
     }
 
@@ -395,21 +471,34 @@ export class ErrorHandler extends EventEmitter2 {
     const name = error.name.toLowerCase();
 
     // Network errors are retryable
+<<<<<<< HEAD
     if (name.includes('network') || name.includes('timeout') || name.includes('connection') || message.includes('network') || message.includes('timeout') || message.includes('connection') || message.includes('timed out') || message.includes('unreachable') || message.includes('refused')) {
+=======
+    if (name.includes('network') || name.includes('timeout') || name.includes('connection')) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return true;
     }
 
     // Rate limit errors are retryable
+<<<<<<< HEAD
     if (message.includes('rate limit') || message.includes('too many requests') || message.includes('429')) {
+=======
+    if (message.includes('rate limit') || message.includes('too many requests')) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return true;
     }
 
     // Authentication errors might be retryable (token refresh)
+<<<<<<< HEAD
     if ((name.includes('auth') || message.includes('auth')) && (message.includes('expired') || message.includes('token'))) {
+=======
+    if (name.includes('auth') && message.includes('expired')) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return true;
     }
 
     // Database connection errors are retryable
+<<<<<<< HEAD
     if ((name.includes('prisma') || name.includes('database') || message.includes('database') || message.includes('db')) && (message.includes('connection') || message.includes('query failed') || message.includes('deadlock'))) {
       return true;
     }
@@ -421,6 +510,9 @@ export class ErrorHandler extends EventEmitter2 {
 
     // System errors that might be transient
     if (message.includes('temporary') || message.includes('transient') || message.includes('retry')) {
+=======
+    if (name.includes('prisma') && message.includes('connection')) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       return true;
     }
 
@@ -472,7 +564,11 @@ export class ErrorHandler extends EventEmitter2 {
   private handleCriticalError(error: TradingError): void {
     // Emit critical error event
     this.emit('criticalError', error);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     // Log to system alerts
     logger.fatal('CRITICAL ERROR - System intervention may be required', {
       error: error.message,
@@ -492,6 +588,7 @@ export class ErrorHandler extends EventEmitter2 {
    */
   public getErrorStats(): Record<string, any> {
     const stats: Record<string, any> = {};
+<<<<<<< HEAD
 
     for (const [key, count] of this.errorCounts.entries()) {
       const [category, code] = key.split('_');
@@ -503,6 +600,19 @@ export class ErrorHandler extends EventEmitter2 {
       }
     }
 
+=======
+    
+         for (const [key, count] of this.errorCounts.entries()) {
+       const [category, code] = key.split('_');
+       if (category && code) {
+         if (!stats[category]) {
+           stats[category] = {};
+         }
+         stats[category][code] = count;
+       }
+     }
+    
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     return stats;
   }
 

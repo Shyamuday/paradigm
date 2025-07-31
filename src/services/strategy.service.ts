@@ -1,6 +1,10 @@
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
+<<<<<<< HEAD
 import { MarketData, TradeSignal, StrategyConfig } from '../schemas/strategy.schema';
+=======
+import { MarketData, TradeSignal } from './strategies/strategy.interface';
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 import { StrategyFactory } from './strategy-factory.service';
 import { ConfigManager } from '../config/config-manager';
 
@@ -46,6 +50,7 @@ export class StrategyService {
                 };
             }
 
+<<<<<<< HEAD
             // Create a complete strategy config from the simplified config
             const completeStrategyConfig: StrategyConfig = {
                 name: strategyConfig.name,
@@ -82,6 +87,9 @@ export class StrategyService {
             };
 
             const strategy = await StrategyFactory.createStrategy(strategyName, completeStrategyConfig);
+=======
+            const strategy = await StrategyFactory.createStrategy(strategyName, strategyConfig.parameters);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             if (!strategy) {
                 return {
                     success: false,

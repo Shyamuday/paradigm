@@ -1,12 +1,21 @@
 import { BaseStrategy } from '../strategy-engine.service';
 import { logger } from '../../logger/logger';
 import {
+<<<<<<< HEAD
 
     TradeSignal,
     MarketData,
     Position
 } from '../../types';
 import { enhancedTechnicalIndicators } from '../enhanced-technical-indicators.service';
+=======
+    StrategyConfig,
+    TradeSignal,
+    MarketData,
+    Position,
+    StrategyType
+} from '../../types';
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 // Options-specific interfaces
 interface OptionContract {

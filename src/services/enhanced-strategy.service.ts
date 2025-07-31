@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { db } from '../database/database';
 import { logger } from '../logger/logger';
 import {
@@ -475,5 +476,18 @@ export class EnhancedStrategyService {
         }
 
         this.executionMetrics.set(strategyName, strategyMetrics);
+=======
+// Stub implementation for EnhancedStrategyService
+export class EnhancedStrategyService {
+    constructor(_a?: any, _b?: any) { }
+    async getStrategy(strategyId: string): Promise<any> {
+        // Return a mock strategy object
+        return { name: 'MockStrategy' };
+    }
+
+    async generateSignals(strategyName: string, periodData: any, technicalAnalysis: any): Promise<{ success: boolean; signals: any[] }> {
+        // Return a mock signals array
+        return { success: true, signals: [] };
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     }
 } 

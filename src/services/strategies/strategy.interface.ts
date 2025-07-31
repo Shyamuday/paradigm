@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import {
     StrategyConfig,
     TradeSignal,
@@ -15,11 +16,35 @@ export interface IStrategy {
     type: string;
     version: string;
     description?: string;
+=======
+export interface MarketData {
+    symbol: string;
+    timestamp: Date;
+    close: number;
+    high: number;
+    low: number;
+    volume: number;
+}
+
+export interface TradeSignal {
+    symbol: string;
+    action: 'BUY' | 'SELL' | 'HOLD';
+    price: number;
+    timestamp: Date;
+    strategy: string;
+    metadata?: any;
+}
+
+export interface IStrategy {
+    name: string;
+    description: string;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
     /**
      * Initializes the strategy with a given configuration.
      * @param config - The strategy-specific configuration.
      */
+<<<<<<< HEAD
     initialize(config: StrategyConfig): Promise<void>;
 
     /**
@@ -28,6 +53,9 @@ export interface IStrategy {
      * @returns True if valid, false otherwise.
      */
     validateConfig(config: StrategyConfig): boolean;
+=======
+    initialize(config: any): Promise<void>;
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
     /**
      * Generates trade signals based on the provided market data.
@@ -35,6 +63,7 @@ export interface IStrategy {
      * @returns A promise that resolves to an array of trade signals.
      */
     generateSignals(marketData: MarketData[]): Promise<TradeSignal[]>;
+<<<<<<< HEAD
 
     /**
      * Calculates position size based on signal and available capital.
@@ -75,4 +104,6 @@ export interface IStrategy {
      * Cleans up resources when the strategy is stopped.
      */
     cleanup(): Promise<void>;
+=======
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 }

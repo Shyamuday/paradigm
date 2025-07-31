@@ -2,22 +2,37 @@
 
 # Trading Session Settings
 trading:
+<<<<<<< HEAD
   mode: "paper" # paper, live, backtest
   capital: 100000 # Total capital in INR
   max_daily_loss: 5000 # Maximum daily loss in INR
   max_position_size: 0.1 # Maximum position size as fraction of capital
+=======
+  mode: "paper"  # paper, live, backtest
+  capital: 100000  # Total capital in INR
+  max_daily_loss: 5000  # Maximum daily loss in INR
+  max_position_size: 0.1  # Maximum position size as fraction of capital
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
   max_open_positions: 5
 
 # Market Data Settings
 market_data:
   websocket_url: "wss://ws.kite.trade/"
+<<<<<<< HEAD
   historical_days: 30 # Days of historical data to fetch on startup
+=======
+  historical_days: 30  # Days of historical data to fetch on startup
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
   instruments:
     - symbol: "NIFTY"
       exchange: "NSE"
       instrument_type: "INDEX"
     - symbol: "BANKNIFTY"
+<<<<<<< HEAD
       exchange: "NSE"
+=======
+      exchange: "NSE" 
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       instrument_type: "INDEX"
     - symbol: "RELIANCE"
       exchange: "NSE"
@@ -27,8 +42,13 @@ market_data:
 risk:
   default_stop_loss_percentage: 2.0
   trailing_stop_loss: true
+<<<<<<< HEAD
   max_risk_per_trade: 0.02 # 2% of capital per trade
   max_portfolio_risk: 0.1 # 10% of capital total risk
+=======
+  max_risk_per_trade: 0.02  # 2% of capital per trade
+  max_portfolio_risk: 0.1   # 10% of capital total risk
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 # Trading Schedule
 schedule:
@@ -43,6 +63,7 @@ strategies:
   simple_ma:
     enabled: true
     description: "Simple Moving Average Crossover"
+<<<<<<< HEAD
     type: "TREND_FOLLOWING"
     parameters:
       short_period: 10
@@ -59,10 +80,24 @@ strategies:
     enabled: true
     description: "RSI Overbought/Oversold Strategy"
     type: "MEAN_REVERSION"
+=======
+    parameters:
+      short_period: 10
+      long_period: 20
+      capital_allocation: 0.3  # 30% of capital
+    instruments:
+      - "NIFTY"
+      - "BANKNIFTY"
+  
+  rsi_strategy:
+    enabled: false
+    description: "RSI Overbought/Oversold Strategy"
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     parameters:
       rsi_period: 14
       overbought_threshold: 70
       oversold_threshold: 30
+<<<<<<< HEAD
       capital: 100000
       max_risk_per_trade: 0.02
       max_daily_loss: 5000
@@ -74,6 +109,15 @@ strategies:
 # Logging Configuration
 logging:
   level: "info" # debug, info, warn, error
+=======
+      capital_allocation: 0.2
+    instruments:
+      - "RELIANCE"
+
+# Logging Configuration
+logging:
+  level: "info"  # debug, info, warn, error
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
   file_path: "./logs/trading-bot.log"
   max_file_size: "10m"
   max_files: 5
@@ -88,4 +132,8 @@ database:
 dashboard:
   enabled: true
   port: 3000
+<<<<<<< HEAD
   cors_origin: "*"
+=======
+  cors_origin: "*" 
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345

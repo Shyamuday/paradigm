@@ -6,8 +6,11 @@ export { PortfolioService } from './services/portfolio.service';
 export { RiskService } from './services/risk.service';
 export { MarketDataService } from './services/market-data.service';
 export { InstrumentsManager } from './services/instruments-manager.service';
+<<<<<<< HEAD
 export { EnhancedInstrumentsManager } from './services/enhanced-instruments-manager.service';
 export { NiftyCategorizationService } from './services/nifty-categorization.service';
+=======
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 export { LiveDataIntegrationService } from './services/live-data-integration.service';
 export { TransactionCostService } from './services/transaction-cost.service';
 export { UserService } from './services/user.service';
@@ -23,4 +26,8 @@ export { BreakoutStrategy } from './services/strategies/breakout-strategy';
 export { EnhancedMomentumStrategy } from './services/strategies/enhanced-momentum-strategy';
 export { OptionsStrategy } from './services/strategies/options-strategy';
 export { OptionsTechnicalAnalysisService } from './services/options-technical-analysis';
+<<<<<<< HEAD
 export { enhancedTechnicalIndicators } from './services/enhanced-technical-indicators.service'; 
+=======
+export { OptionsTechnicalIndicatorsService } from './services/options-technical-indicators.service'; 
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345

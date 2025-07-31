@@ -1,5 +1,9 @@
 import { EventEmitter } from 'events';
 import { ZerodhaAuth } from '../auth/zerodha-auth';
+<<<<<<< HEAD
+=======
+import { logger } from '../logger/logger';
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 export class AuthManagerService extends EventEmitter {
     private static instance: AuthManagerService;

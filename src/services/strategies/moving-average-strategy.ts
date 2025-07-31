@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { BaseStrategy } from '../strategy-engine.service';
 import {
     StrategyConfig,
@@ -37,10 +38,33 @@ export class MovingAverageStrategy extends BaseStrategy {
         }
 
         return true;
+=======
+import { IStrategy, MarketData, TradeSignal } from './strategy.interface';
+import { logger } from '../../logger/logger';
+
+interface MovingAverageConfig {
+    shortPeriod: number;
+    longPeriod: number;
+    volumeThreshold?: number;
+}
+
+export class MovingAverageStrategy implements IStrategy {
+    public name = 'moving_average';
+    public description = 'A simple moving average crossover strategy.';
+    private config!: MovingAverageConfig;
+
+    async initialize(config: any): Promise<void> {
+        if (!config.shortPeriod || !config.longPeriod) {
+            throw new Error('Missing required configuration for MovingAverageStrategy.');
+        }
+        this.config = config;
+        logger.info('MovingAverageStrategy initialized with config:', this.config);
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
     }
 
     async generateSignals(marketData: MarketData[]): Promise<TradeSignal[]> {
         const signals: TradeSignal[] = [];
+<<<<<<< HEAD
 
         if (!this.config.parameters) {
             logger.error('MovingAverageStrategy: Configuration not initialized');
@@ -60,6 +84,16 @@ export class MovingAverageStrategy extends BaseStrategy {
         const longMA = enhancedTechnicalIndicators.calculateSMA(prices, longPeriod);
 
         for (let i = longPeriod; i < marketData.length; i++) {
+=======
+        if (marketData.length < this.config.longPeriod) {
+            return signals;
+        }
+
+        const shortMA = this.calculateSMA(marketData, this.config.shortPeriod);
+        const longMA = this.calculateSMA(marketData, this.config.longPeriod);
+
+        for (let i = this.config.longPeriod; i < marketData.length; i++) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
             const currentData = marketData[i];
             if (!currentData) continue;
 
@@ -74,7 +108,11 @@ export class MovingAverageStrategy extends BaseStrategy {
                 prevShortMA !== null &&
                 prevLongMA !== null
             ) {
+<<<<<<< HEAD
                 if (volumeThreshold && currentData.volume && currentData.volume < volumeThreshold) {
+=======
+                if (this.config.volumeThreshold && currentData.volume < this.config.volumeThreshold) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
                     continue;
                 }
 
@@ -82,6 +120,7 @@ export class MovingAverageStrategy extends BaseStrategy {
                 const previousCrossover = prevShortMA! - prevLongMA!;
 
                 if (previousCrossover <= 0 && currentCrossover > 0) {
+<<<<<<< HEAD
                     const signal: TradeSignal = {
                         id: crypto.randomUUID(),
                         symbol: currentData.symbol,
@@ -131,6 +170,31 @@ export class MovingAverageStrategy extends BaseStrategy {
                     const finalSignal = this.applyRiskManagement(sizedSignal);
 
                     signals.push(finalSignal);
+=======
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'BUY',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+                        metadata: {
+                            shortMA: currentShortMA,
+                            longMA: currentLongMA,
+                        },
+                    });
+                } else if (previousCrossover >= 0 && currentCrossover < 0) {
+                    signals.push({
+                        symbol: currentData.symbol,
+                        action: 'SELL',
+                        price: currentData.close,
+                        timestamp: currentData.timestamp,
+                        strategy: this.name,
+                        metadata: {
+                            shortMA: currentShortMA,
+                            longMA: currentLongMA,
+                        },
+                    });
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
                 }
             }
         }
@@ -138,6 +202,7 @@ export class MovingAverageStrategy extends BaseStrategy {
         return signals;
     }
 
+<<<<<<< HEAD
     async shouldExit(position: Position, marketData: MarketData[]): Promise<boolean> {
         if (!this.config.parameters) return false;
 
@@ -196,4 +261,19 @@ export class MovingAverageStrategy extends BaseStrategy {
     }
 
     // Using centralized technical indicator service instead of local calculation
+=======
+    private calculateSMA(data: MarketData[], period: number): (number | null)[] {
+        const sma: (number | null)[] = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                sma.push(null);
+                continue;
+            }
+            const slice = data.slice(i - period + 1, i + 1);
+            const sum = slice.reduce((acc, val) => acc + val.close, 0);
+            sma.push(sum / period);
+        }
+        return sma;
+    }
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 }

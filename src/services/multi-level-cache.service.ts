@@ -71,7 +71,10 @@ export class MultiLevelCacheService extends EventEmitter {
   private compressionEnabled: boolean = false;
   private encryptionEnabled: boolean = false;
   private encryptionKey: string = '';
+<<<<<<< HEAD
   private cleanupInterval: NodeJS.Timeout | null = null;
+=======
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
   constructor(config: MultiLevelCacheConfig) {
     super();
@@ -139,7 +142,11 @@ export class MultiLevelCacheService extends EventEmitter {
     });
 
     // Start cleanup interval
+<<<<<<< HEAD
     this.cleanupInterval = setInterval(() => {
+=======
+    setInterval(() => {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       this.cleanupL1Cache();
     }, 60000); // Cleanup every minute
   }
@@ -865,6 +872,7 @@ export class MultiLevelCacheService extends EventEmitter {
    */
   async dispose(): Promise<void> {
     try {
+<<<<<<< HEAD
       if (this.cleanupInterval) {
         clearInterval(this.cleanupInterval);
         this.cleanupInterval = null;
@@ -872,6 +880,9 @@ export class MultiLevelCacheService extends EventEmitter {
 
       if (this.redis) {
         this.redis.removeAllListeners();
+=======
+      if (this.redis) {
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
         await this.redis.disconnect();
       }
 

@@ -12,13 +12,48 @@
     "resolveJsonModule": true,
     "declaration": true,
     "declarationMap": true,
+<<<<<<< HEAD
     "sourceMap": true
+=======
+    "sourceMap": true,
+    "removeComments": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"],
+      "@/auth/*": ["auth/*"],
+      "@/market-data/*": ["market-data/*"],
+      "@/strategy/*": ["strategy/*"],
+      "@/risk/*": ["risk/*"],
+      "@/order/*": ["order/*"],
+      "@/position/*": ["position/*"],
+      "@/logger/*": ["logger/*"],
+      "@/scheduler/*": ["scheduler/*"],
+      "@/config/*": ["config/*"],
+      "@/storage/*": ["storage/*"],
+      "@/dashboard/*": ["dashboard/*"]
+    }
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
   },
   "include": [
     "src/**/*"
   ],
   "exclude": [
     "node_modules",
+<<<<<<< HEAD
     "dist"
+=======
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+>>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
   ]
 } 
