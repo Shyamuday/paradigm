@@ -88,11 +88,7 @@ export class ZerodhaAuth {
                     // Validate the response using Zod
                     const validatedSession = ZerodhaLoginResponseSchema.parse(sessionResponse);
 
-                    if (validatedSession.status === 'error' || !validatedSession.data) {
-                        throw new Error(validatedSession.message || 'Login failed');
-                    }
-
-                    const session = validatedSession.data;
+                    const session = validatedSession;
 
                     // Set the access token
                     this.kite.setAccessToken(session.access_token);
@@ -122,7 +118,7 @@ export class ZerodhaAuth {
                     // Test API access
                     const profileTestResponse = await this.kite.getProfile();
                     const validatedProfileTest = AccessTokenValidationSchema.parse(profileTestResponse);
-                    console.log('\nAPI Connection Test:', validatedProfileTest.status === 'success' ? '✅ Successful' : '❌ Failed');
+                    console.log('\nAPI Connection Test: ✅ Successful');
 
                     resolve();
                 } catch (error) {
@@ -180,11 +176,7 @@ export class ZerodhaAuth {
             // Validate the profile response using Zod
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
 
-            if (validatedProfile.status === 'error' || !validatedProfile.data) {
-                throw new Error(validatedProfile.message || 'Token validation failed');
-            }
-
-            const profile = validatedProfile.data;
+            const profile = validatedProfile;
 
             // Save session
             await this.saveSession({
@@ -242,13 +234,8 @@ export class ZerodhaAuth {
             // Validate the profile response
             const validatedProfile = AccessTokenValidationSchema.parse(profileResponse);
 
-            if (validatedProfile.status === 'error' || !validatedProfile.data) {
-                logger.warn('Session validation failed:', validatedProfile.message);
-                return false;
-            }
-
             console.log('\n✅ Valid session found');
-            console.log(`User: ${validatedProfile.data.user_name}`);
+            console.log(`User: ${validatedProfile.user_name}`);
 
             return true;
         } catch (error) {

@@ -1,0 +1,352 @@
+[
+  {
+    "symbol": "ADANIENT",
+    "name": "ADANI ENTERPRISES",
+    "instrumentToken": 6401,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "APOLLOHOSP",
+    "name": "APOLLO HOSPITALS ENTER. L",
+    "instrumentToken": 40193,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ASIANPAINT",
+    "name": "ASIAN PAINTS",
+    "instrumentToken": 60417,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "BAJFINANCE",
+    "name": "BAJAJ FINANCE",
+    "instrumentToken": 81153,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HDFCLIFE",
+    "name": "HDFC LIFE INS CO",
+    "instrumentToken": 119553,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "BPCL",
+    "name": "BHARAT PETROLEUM CORP  LT",
+    "instrumentToken": 134657,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "BRITANNIA",
+    "name": "BRITANNIA INDUSTRIES",
+    "instrumentToken": 140033,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "CIPLA",
+    "name": "CIPLA",
+    "instrumentToken": 177665,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "DRREDDY",
+    "name": "DR. REDDY S LABORATORIES",
+    "instrumentToken": 225537,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "EICHERMOT",
+    "name": "EICHER MOTORS",
+    "instrumentToken": 232961,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "GRASIM",
+    "name": "GRASIM INDUSTRIES",
+    "instrumentToken": 315393,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HDFCBANK",
+    "name": "HDFC BANK",
+    "instrumentToken": 341249,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HEROMOTOCO",
+    "name": "HERO MOTOCORP",
+    "instrumentToken": 345089,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HINDALCO",
+    "name": "HINDALCO  INDUSTRIES ",
+    "instrumentToken": 348929,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HINDUNILVR",
+    "name": "HINDUSTAN UNILEVER",
+    "instrumentToken": 356865,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "INFY",
+    "name": "INFOSYS",
+    "instrumentToken": 408065,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ITC",
+    "name": "ITC",
+    "instrumentToken": 424961,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "KOTAKBANK",
+    "name": "KOTAK MAHINDRA BANK",
+    "instrumentToken": 492033,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "M&M",
+    "name": "MAHINDRA & MAHINDRA",
+    "instrumentToken": 519937,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ONGC",
+    "name": "OIL AND NATURAL GAS CORP.",
+    "instrumentToken": 633601,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "RELIANCE",
+    "name": "RELIANCE INDUSTRIES",
+    "instrumentToken": 738561,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "SBIN",
+    "name": "STATE BANK OF INDIA",
+    "instrumentToken": 779521,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "VEDL",
+    "name": "VEDANTA",
+    "instrumentToken": 784129,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "SHREECEM",
+    "name": "SHREE CEMENT",
+    "instrumentToken": 794369,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "SUNPHARMA",
+    "name": "SUN PHARMACEUTICAL IND L",
+    "instrumentToken": 857857,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TATAPOWER",
+    "name": "TATA POWER CO",
+    "instrumentToken": 877057,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TATACONSUM",
+    "name": "TATA CONSUMER PRODUCT",
+    "instrumentToken": 878593,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TATAMOTORS",
+    "name": "TATA MOTORS",
+    "instrumentToken": 884737,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TATASTEEL",
+    "name": "TATA STEEL",
+    "instrumentToken": 895745,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TITAN",
+    "name": "TITAN COMPANY",
+    "instrumentToken": 897537,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "WIPRO",
+    "name": "WIPRO",
+    "instrumentToken": 969473,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ICICIBANK",
+    "name": "ICICI BANK",
+    "instrumentToken": 1270529,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "AXISBANK",
+    "name": "AXIS BANK",
+    "instrumentToken": 1510401,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "HCLTECH",
+    "name": "HCL TECHNOLOGIES",
+    "instrumentToken": 1850625,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "BHARTIARTL",
+    "name": "BHARTI AIRTEL",
+    "instrumentToken": 2714625,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "DIVISLAB",
+    "name": "DIVI S LABORATORIES",
+    "instrumentToken": 2800641,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "MARUTI",
+    "name": "MARUTI SUZUKI INDIA",
+    "instrumentToken": 2815745,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "UPL",
+    "name": "UPL",
+    "instrumentToken": 2889473,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "LT",
+    "name": "LARSEN & TOUBRO",
+    "instrumentToken": 2939649,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ULTRACEMCO",
+    "name": "ULTRATECH CEMENT",
+    "instrumentToken": 2952193,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TCS",
+    "name": "TATA CONSULTANCY SERV LT",
+    "instrumentToken": 2953217,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "NTPC",
+    "name": "NTPC",
+    "instrumentToken": 2977281,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "JSWSTEEL",
+    "name": "JSW STEEL",
+    "instrumentToken": 3001089,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "TECHM",
+    "name": "TECH MAHINDRA",
+    "instrumentToken": 3465729,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "POWERGRID",
+    "name": "POWER GRID CORP.",
+    "instrumentToken": 3834113,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "ADANIPORTS",
+    "name": "ADANI PORT & SEZ",
+    "instrumentToken": 3861249,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "BAJAJFINSV",
+    "name": "BAJAJ FINSERV",
+    "instrumentToken": 4268801,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "NESTLEIND",
+    "name": "NESTLE INDIA",
+    "instrumentToken": 4598529,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "COALINDIA",
+    "name": "COAL INDIA",
+    "instrumentToken": 5215745,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  },
+  {
+    "symbol": "SBILIFE",
+    "name": "SBI LIFE INSURANCE CO",
+    "instrumentToken": 5582849,
+    "exchange": "NSE",
+    "instrumentType": "EQ"
+  }
+]

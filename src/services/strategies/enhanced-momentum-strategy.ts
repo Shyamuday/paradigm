@@ -7,6 +7,7 @@ import {
     StrategyType
 } from '../../schemas/strategy.schema';
 import { TradeSignal, MarketData, Position } from '../../types';
+import { enhancedTechnicalIndicators } from '../enhanced-technical-indicators.service';
 
 function ensureNumber(val: unknown): number {
     return typeof val === 'number' && !isNaN(val) ? val : 0;
@@ -58,18 +59,32 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
         const volumeMultiplier = this.config.parameters.volumeMultiplier || 1.5;
         const momentumPeriod = this.config.parameters.momentumPeriod || 10;
 
-        // Calculate all technical indicators
+        // Calculate all technical indicators using enhanced service
+        const prices = internalData.map(d => d.close || 0).filter(price => price > 0);
+        const highs = internalData.map(d => d.high || 0).filter(h => h > 0);
+        const lows = internalData.map(d => d.low || 0).filter(l => l > 0);
+
+        const rsiValues = enhancedTechnicalIndicators.calculateRSI(prices, rsiPeriod);
+        const rsi = rsiValues.length > 0 ? rsiValues[rsiValues.length - 1] : 50;
+
+        const macdResult = enhancedTechnicalIndicators.calculateMACD(prices, macdFast, macdSlow);
+        const macd = macdResult.macd.length > 0 ? macdResult.macd[macdResult.macd.length - 1] : 0;
+
+        const adxResult = enhancedTechnicalIndicators.calculateADX(highs, lows, prices, adxPeriod);
+        const adx = adxResult.adx.length > 0 ? (adxResult.adx[adxResult.adx.length - 1] || 0) : 0;
+
+        const bbResult = enhancedTechnicalIndicators.calculateBollingerBands(prices, bbPeriod, bbStdDev);
+        const bb = {
+            upper: bbResult.upper.length > 0 ? bbResult.upper[bbResult.upper.length - 1] : 0,
+            middle: bbResult.middle.length > 0 ? bbResult.middle[bbResult.middle.length - 1] : 0,
+            lower: bbResult.lower.length > 0 ? bbResult.lower[bbResult.lower.length - 1] : 0
+        };
+
+        const momentumArr = enhancedTechnicalIndicators.calculateROC(prices, momentumPeriod);
+        const momentum = momentumArr.length > 0 ? momentumArr : [0];
+
         const schemaData = toSchemaMarketDataArray(internalData);
-        const rsi = this.calculateRSI(schemaData, rsiPeriod);
-        const macd = this.calculateMACD(schemaData, macdFast, macdSlow);
-        const adxArr = this.calculateADX(schemaData as any, adxPeriod);
-        const adx = Array.isArray(adxArr) ? (adxArr.length > 0 ? adxArr[adxArr.length - 1] : 0) : (typeof adxArr === 'number' ? adxArr : 0);
-        const bbArr = this.calculateBollingerBands(schemaData as any, bbPeriod, bbStdDev);
-        const bb = Array.isArray(bbArr) ? (bbArr.length > 0 ? bbArr[bbArr.length - 1] : { upper: 0, middle: 0, lower: 0 }) : (bbArr ?? { upper: 0, middle: 0, lower: 0 });
-        const momentumArr = this.calculateMomentum(schemaData as any, momentumPeriod);
-        const momentum = Array.isArray(momentumArr) ? momentumArr : [momentumArr || 0];
-        const volumeProfileArr = this.calculateVolumeProfile(schemaData as any, 20);
-        const volumeProfile = Array.isArray(volumeProfileArr) ? (volumeProfileArr.length > 0 ? volumeProfileArr[volumeProfileArr.length - 1] : { aboveAverage: false, increasing: false, average: 0 }) : (volumeProfileArr ?? { aboveAverage: false, increasing: false, average: 0 });
+        const volumeProfile = this.calculateVolumeProfile(schemaData as any, 20);
 
         for (let i = Math.max(100, adxPeriod + 10); i < internalData.length; i++) {
             const currentData = internalData[i];
@@ -77,14 +92,14 @@ export class EnhancedMomentumStrategy extends BaseStrategy {
             if (!currentData || !prevData) continue;
             const currentPrice = currentData.close ?? currentData.ltp ?? 0;
             const prevPrice = prevData.close ?? prevData.ltp ?? 0;
-            if (currentPrice === undefined || prevPrice === undefined) continue;
+            if (currentPrice === undefined || prevPrice === undefined || currentPrice === null || prevPrice === null) continue;
 
             // Get indicator values
             const currentRSI = rsi;
             const prevRSI = rsi;
             const currentMACD = macd;
             const prevMACD = macd;
-            const currentADX = adx;
+            const currentADX: number = adx || 0;
             const currentBB = bb;
             const currentMomentum = Number(momentum?.[i]) || 0;
             const currentVolumeProfile = volumeProfile;

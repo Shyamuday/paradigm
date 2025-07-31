@@ -1,0 +1,123 @@
+{
+  "instruments": [
+    {
+      "symbol": "NIFTY",
+      "name": "NIFTY 50 FUTURES",
+      "exchange": "NFO",
+      "token": 256265,
+      "enabled": true
+    },
+    {
+      "symbol": "BANKNIFTY",
+      "name": "BANK NIFTY FUTURES",
+      "exchange": "NFO",
+      "token": 260105,
+      "enabled": true
+    },
+    {
+      "symbol": "FINNIFTY",
+      "name": "FINANCIAL NIFTY FUTURES",
+      "exchange": "NFO",
+      "token": 260825,
+      "enabled": true
+    },
+    {
+      "symbol": "RELIANCE",
+      "name": "RELIANCE INDUSTRIES FUTURES",
+      "exchange": "NFO",
+      "token": 2885,
+      "enabled": true
+    },
+    {
+      "symbol": "TCS",
+      "name": "TATA CONSULTANCY SERVICES FUTURES",
+      "exchange": "NFO",
+      "token": 11536,
+      "enabled": true
+    },
+    {
+      "symbol": "HDFCBANK",
+      "name": "HDFC BANK FUTURES",
+      "exchange": "NFO",
+      "token": 341,
+      "enabled": true
+    },
+    {
+      "symbol": "INFY",
+      "name": "INFOSYS FUTURES",
+      "exchange": "NFO",
+      "token": 1594,
+      "enabled": true
+    },
+    {
+      "symbol": "ICICIBANK",
+      "name": "ICICI BANK FUTURES",
+      "exchange": "NFO",
+      "token": 4963,
+      "enabled": true
+    },
+    {
+      "symbol": "ITC",
+      "name": "ITC FUTURES",
+      "exchange": "NFO",
+      "token": 1660,
+      "enabled": true
+    },
+    {
+      "symbol": "SBIN",
+      "name": "STATE BANK OF INDIA FUTURES",
+      "exchange": "NFO",
+      "token": 3045,
+      "enabled": true
+    }
+  ],
+  "timeframes": [
+    {
+      "name": "1min",
+      "minutes": 1,
+      "enabled": true
+    },
+    {
+      "name": "3min",
+      "minutes": 3,
+      "enabled": true
+    },
+    {
+      "name": "5min",
+      "minutes": 5,
+      "enabled": true
+    },
+    {
+      "name": "15min",
+      "minutes": 15,
+      "enabled": true
+    },
+    {
+      "name": "30min",
+      "minutes": 30,
+      "enabled": true
+    },
+    {
+      "name": "60min",
+      "minutes": 60,
+      "enabled": true
+    },
+    {
+      "name": "1day",
+      "minutes": 1440,
+      "enabled": true
+    }
+  ],
+  "download_settings": {
+    "months": 3,
+    "batch_size": 5,
+    "delay_between_batches": 2000,
+    "max_retries": 3,
+    "retry_delay": 5000
+  },
+  "api_settings": {
+    "base_url": "https://api.kite.trade",
+    "timeout": 30000,
+    "rate_limit": 100
+  }
+}

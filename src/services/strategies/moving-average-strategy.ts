@@ -9,6 +9,7 @@ import {
     StrategyType
 } from '../../schemas/strategy.schema';
 import { logger } from '../../logger/logger';
+import { enhancedTechnicalIndicators } from '../enhanced-technical-indicators.service';
 
 export class MovingAverageStrategy extends BaseStrategy {
     constructor() {
@@ -54,8 +55,9 @@ export class MovingAverageStrategy extends BaseStrategy {
             return signals;
         }
 
-        const shortMA = this.calculateSMA(marketData, shortPeriod);
-        const longMA = this.calculateSMA(marketData, longPeriod);
+        const prices = marketData.map(d => d.close || 0).filter(price => price > 0);
+        const shortMA = enhancedTechnicalIndicators.calculateSMA(prices, shortPeriod);
+        const longMA = enhancedTechnicalIndicators.calculateSMA(prices, longPeriod);
 
         for (let i = longPeriod; i < marketData.length; i++) {
             const currentData = marketData[i];
@@ -144,8 +146,9 @@ export class MovingAverageStrategy extends BaseStrategy {
 
         if (marketData.length < longPeriod) return false;
 
-        const shortMA = this.calculateSMA(marketData, shortPeriod);
-        const longMA = this.calculateSMA(marketData, longPeriod);
+        const prices = marketData.map(d => d.close || 0).filter(price => price > 0);
+        const shortMA = enhancedTechnicalIndicators.calculateSMA(prices, shortPeriod);
+        const longMA = enhancedTechnicalIndicators.calculateSMA(prices, longPeriod);
 
         const currentShortMA = shortMA[shortMA.length - 1];
         const currentLongMA = longMA[longMA.length - 1];
@@ -192,17 +195,5 @@ export class MovingAverageStrategy extends BaseStrategy {
         };
     }
 
-    private calculateSMA(data: MarketData[], period: number): (number | null)[] {
-        const sma: (number | null)[] = [];
-        for (let i = 0; i < data.length; i++) {
-            if (i < period - 1) {
-                sma.push(null);
-                continue;
-            }
-            const slice = data.slice(i - period + 1, i + 1);
-            const sum = slice.reduce((acc, val) => acc + (val.close || 0), 0);
-            sma.push(sum / period);
-        }
-        return sma;
-    }
+    // Using centralized technical indicator service instead of local calculation
 }

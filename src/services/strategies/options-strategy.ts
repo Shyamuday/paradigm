@@ -6,6 +6,7 @@ import {
     MarketData,
     Position
 } from '../../types';
+import { enhancedTechnicalIndicators } from '../enhanced-technical-indicators.service';
 
 // Options-specific interfaces
 interface OptionContract {

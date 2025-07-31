@@ -4,6 +4,7 @@ import { RsiStrategy } from './strategies/rsi-strategy';
 import { BreakoutStrategy } from './strategies/breakout-strategy';
 import { EnhancedMomentumStrategy } from './strategies/enhanced-momentum-strategy';
 import { OptionsStrategy } from './strategies/options-strategy';
+import { ADXStrategy } from './strategies/adx-strategy';
 import { StrategyConfig } from '../schemas/strategy.schema';
 import { logger } from '../logger/logger';
 
@@ -14,6 +15,7 @@ export class StrategyFactory {
         breakout: BreakoutStrategy,
         momentum: EnhancedMomentumStrategy,
         options: OptionsStrategy,
+        adx: ADXStrategy,
     };
 
     static async createStrategy(name: string, config: StrategyConfig): Promise<IStrategy | null> {

@@ -1,0 +1,37 @@
+{
+    "name": "paradigm-minimal",
+    "version": "1.0.0",
+    "description": "Minimal trading system with dynamic data download",
+    "main": "src/index.ts",
+    "scripts": {
+        "start": "ts-node src/index.ts",
+        "paper-trade": "ts-node src/paper-trading.ts",
+        "monitor": "ts-node src/monitor.ts",
+        "backtest": "ts-node src/backtest.ts",
+        "download-data": "ts-node src/download-data.ts",
+        "download-instruments": "ts-node src/download-instruments.ts",
+        "build": "tsc",
+        "dev": "ts-node-dev src/index.ts",
+        "db:studio": "npx prisma studio",
+        "db:generate": "npx prisma generate",
+        "db:push": "npx prisma db push"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.22.0",
+        "kiteconnect": "^5.0.0",
+        "prisma": "^5.22.0",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.0"
+    },
+    "keywords": [
+        "trading",
+        "zerodha",
+        "paper-trading",
+        "backtest"
+    ],
+    "author": "Your Name",
+    "license": "MIT"
+}
