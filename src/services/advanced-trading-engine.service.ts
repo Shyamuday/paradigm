@@ -1,14 +1,9 @@
 import { EventEmitter } from 'events';
 import { logger } from '../logger/logger';
-<<<<<<< HEAD
-=======
-import { mathUtils } from './math-utils.service';
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 import { CacheService } from './cache.service';
 import { PerformanceMonitorService } from './performance-monitor.service';
 import { NotificationService } from './notification.service';
 import { WebSocketAPIService } from './websocket-api.service';
-<<<<<<< HEAD
 import { OrderManagerService } from './order-manager.service';
 import { PortfolioService } from './portfolio.service';
 import { MarketDataService } from './market-data.service';
@@ -27,20 +22,6 @@ if (process.env.NODE_ENV !== 'test') {
     logger.warn('Failed to initialize ZerodhaAuth:', error);
   }
 }
-=======
-import { StrategyEngineService } from './strategy-engine.service';
-import { OrderManagerService } from './order-manager.service';
-import { PortfolioService } from './portfolio.service';
-import { RiskService } from './risk.service';
-import { MarketDataService } from './market-data.service';
-import { KiteConnect } from 'kiteconnect';
-import { InstrumentsManager } from './instruments-manager.service';
-import { ZerodhaAuth } from '../auth/zerodha-auth';
-
-// Real dependencies
-const auth = new ZerodhaAuth();
-const instrumentsManager = new InstrumentsManager(auth);
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
 let orderManager: any;
 let portfolioService: any;
@@ -61,7 +42,6 @@ if (process.env.NODE_ENV === 'test') {
   cacheService = { set: async () => { } };
 } else {
   // Use real integrations for production/development
-<<<<<<< HEAD
   if (auth && instrumentsManager) {
     const kite = auth.getKite ? auth.getKite() : (auth as any).kite;
     orderManager = new OrderManagerService(kite, 'default_session');
@@ -81,16 +61,6 @@ if (process.env.NODE_ENV === 'test') {
     webSocketAPIService = { broadcastToTopic: () => { } };
     cacheService = { set: async () => { } };
   }
-=======
-  const kite = auth.getKite ? auth.getKite() : (auth as any).kite;
-  orderManager = new OrderManagerService(kite, 'default_session');
-  marketDataService = new MarketDataService(instrumentsManager, kite);
-  portfolioService = new PortfolioService(kite, marketDataService, orderManager);
-  notificationService = new NotificationService();
-  performanceMonitor = new PerformanceMonitorService();
-  webSocketAPIService = new WebSocketAPIService();
-  cacheService = new CacheService({ host: 'localhost', port: 6379, password: '' });
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 }
 
 export interface TradingSignal {

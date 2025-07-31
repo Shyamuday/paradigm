@@ -1,17 +1,8 @@
 {
-<<<<<<< HEAD
   "access_token": "k9g6Xl8cSun0IebAgGRH8PV9YhgaiIB4",
   "user_id": "XB7556",
   "user_name": "Shyam Kumar",
   "email": "shyamkumar.jnv@gmail.com",
   "expires_at": "2025-07-31T02:20:41.844Z",
   "login_time": "2025-07-30T02:20:41.844Z"
-=======
-    "access_token": "v32A5jkKTiA49DQIQ5uAiVbmFiOnr6aI",
-    "refresh_token": "",
-    "user_id": "XB7556",
-    "user_name": "Shyam Kumar",
-    "expires_at": "2025-07-16T15:08:07.485Z",
-    "login_time": "2025-07-15T15:08:07.485Z"
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 }

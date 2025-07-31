@@ -1,10 +1,7 @@
 node_modules
 dist/
 *.log
-<<<<<<< HEAD
 logs/
-=======
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 .env
 .env.local
 .env.production

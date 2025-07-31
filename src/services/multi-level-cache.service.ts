@@ -50,7 +50,7 @@ export interface MultiLevelCacheConfig {
   redis?: {
     host: string;
     port: number;
-    password?: string;
+    password?: string; 
     db?: number;
   };
   prisma?: PrismaClient;
@@ -60,7 +60,7 @@ export interface MultiLevelCacheConfig {
   encryptionKey?: string;
 }
 
-export class MultiLevelCacheService extends EventEmitter {
+̇export class MultiLevelCacheService extends EventEmitter {
   private l1Cache: Map<string, CacheItem> = new Map();
   private redis: Redis | null = null;
   private prisma: PrismaClient | null = null;
@@ -71,10 +71,7 @@ export class MultiLevelCacheService extends EventEmitter {
   private compressionEnabled: boolean = false;
   private encryptionEnabled: boolean = false;
   private encryptionKey: string = '';
-<<<<<<< HEAD
   private cleanupInterval: NodeJS.Timeout | null = null;
-=======
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
 
   constructor(config: MultiLevelCacheConfig) {
     super();
@@ -142,11 +139,7 @@ export class MultiLevelCacheService extends EventEmitter {
     });
 
     // Start cleanup interval
-<<<<<<< HEAD
     this.cleanupInterval = setInterval(() => {
-=======
-    setInterval(() => {
->>>>>>> 176e79a3444e6c15f5b39fd914859712a1b50345
       this.cleanupL1Cache();
     }, 60000); // Cleanup every minute
   }
