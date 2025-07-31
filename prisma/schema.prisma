@@ -65,3 +65,22 @@ model MarketData {
 
   @@map("market_data")
 }
+
+model Trade {
+  id          String   @id @default(cuid())
+  symbol      String
+  action      String   // BUY, SELL
+  quantity    Int
+  entryPrice  Float
+  exitPrice   Float?
+  entryTime   DateTime @default(now())
+  exitTime    DateTime?
+  status      String   // PENDING, EXECUTED, CANCELLED, CLOSED
+  orderId     String?
+  pnl         Float?
+  pnlPercent  Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("trades")
+}
